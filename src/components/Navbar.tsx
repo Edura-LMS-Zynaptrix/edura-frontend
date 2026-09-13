@@ -33,6 +33,16 @@ export default function Navbar() {
     { href: '/student/rankings', label: 'Rankings' },
   ]
 
+  // Edura's roles are student/teacher/admin — teacher has no dedicated
+  // management UI yet, so it falls back to the generic dashboard rather
+  // than the student-only "My Courses" page.
+  const portal =
+    user?.role === 'admin'
+      ? { href: '/admin/dashboard', label: 'Admin Portal' }
+      : user?.role === 'teacher'
+      ? { href: '/dashboard', label: 'Dashboard' }
+      : { href: '/student/my-courses', label: 'My Courses' }
+
   return (
     <nav className="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -61,14 +71,12 @@ export default function Navbar() {
             ))}
             {isAuthenticated && !needsProfileCompletion && (
               <Link
-                href={(user?.role === 'admin' || user?.role === 'super_admin') ? '/admin/dashboard' : '/student/my-courses'}
+                href={portal.href}
                 className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  ((user?.role === 'admin' || user?.role === 'super_admin') ? pathname.startsWith('/admin') : pathname.startsWith('/student/my-courses'))
-                    ? 'text-teal-700 bg-teal-50'
-                    : 'text-teal-700 hover:bg-teal-50'
+                  pathname.startsWith(portal.href) ? 'text-teal-700 bg-teal-50' : 'text-teal-700 hover:bg-teal-50'
                 }`}
               >
-                {(user?.role === 'admin' || user?.role === 'super_admin') ? 'Admin Portal' : 'My Courses'}
+                {portal.label}
               </Link>
             )}
           </div>
@@ -129,14 +137,12 @@ export default function Navbar() {
           ))}
           {isAuthenticated && !needsProfileCompletion && (
             <Link
-              href={(user?.role === 'admin' || user?.role === 'super_admin') ? '/admin/dashboard' : '/student/my-courses'}
+              href={portal.href}
               className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                ((user?.role === 'admin' || user?.role === 'super_admin') ? pathname.startsWith('/admin') : pathname.startsWith('/student/my-courses'))
-                  ? 'text-teal-700 bg-teal-50'
-                  : 'text-teal-700 hover:bg-teal-50'
+                pathname.startsWith(portal.href) ? 'text-teal-700 bg-teal-50' : 'text-teal-700 hover:bg-teal-50'
               }`}
             >
-              {(user?.role === 'admin' || user?.role === 'super_admin') ? 'Admin Portal' : 'My Courses'}
+              {portal.label}
             </Link>
           )}
           {!isAuthenticated && (

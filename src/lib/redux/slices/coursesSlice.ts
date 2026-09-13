@@ -2,6 +2,7 @@ import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit'
 import * as adminApi from '@/lib/api/admin'
 import * as studentApi from '@/lib/api/student'
 import { ExamWithAccess } from '@/lib/api/student'
+import { getErrorMessage } from '@/lib/utils'
 
 export interface AdminSubCourse {
   id: string
@@ -81,7 +82,7 @@ export const fetchCourses = createAsyncThunk(
     try {
       return await adminApi.getCourses()
     } catch (error: any) {
-      return rejectWithValue(error?.response?.data?.detail || 'Failed to load courses')
+      return rejectWithValue(getErrorMessage(error))
     }
   }
 )
@@ -102,14 +103,14 @@ export const createCourse = createAsyncThunk(
     try {
       return await adminApi.createCourse(data)
     } catch (error: any) {
-      return rejectWithValue(error?.response?.data?.detail || 'Failed to create course')
+      return rejectWithValue(getErrorMessage(error))
     }
   }
 )
 
 export const updateCourse = createAsyncThunk(
   'courses/updateCourse',
-  async ({ id, data }: { 
+  async ({ id, data }: {
     id: string
     data: {
       title?: string
@@ -121,12 +122,13 @@ export const updateCourse = createAsyncThunk(
       image_url?: string | null
       image_public_id?: string | null
       stream_ids?: string[]
+      status?: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED'
     }
   }, { rejectWithValue }) => {
     try {
       return await adminApi.updateCourse(id, data)
     } catch (error: any) {
-      return rejectWithValue(error?.response?.data?.detail || 'Failed to update course')
+      return rejectWithValue(getErrorMessage(error))
     }
   }
 )
@@ -137,7 +139,7 @@ export const createSubCourse = createAsyncThunk(
     try {
       return await adminApi.createSubCourse(data)
     } catch (error: any) {
-      return rejectWithValue(error?.response?.data?.detail || 'Failed to create sub-course')
+      return rejectWithValue(getErrorMessage(error))
     }
   }
 )
@@ -148,7 +150,7 @@ export const updateSubCourse = createAsyncThunk(
     try {
       return await adminApi.updateSubCourse(id, data)
     } catch (error: any) {
-      return rejectWithValue(error?.response?.data?.detail || 'Failed to update sub-course')
+      return rejectWithValue(getErrorMessage(error))
     }
   }
 )
@@ -160,7 +162,7 @@ export const deleteSubCourse = createAsyncThunk(
       await adminApi.deleteSubCourse(id)
       return id
     } catch (error: any) {
-      return rejectWithValue(error?.response?.data?.detail || 'Failed to delete sub-course')
+      return rejectWithValue(getErrorMessage(error))
     }
   }
 )
@@ -173,7 +175,7 @@ export const fetchAvailableCourses = createAsyncThunk(
     try {
       return await studentApi.getAvailableCourses()
     } catch (error: any) {
-      return rejectWithValue(error?.response?.data?.detail || 'Failed to load available courses')
+      return rejectWithValue(getErrorMessage(error))
     }
   }
 )
@@ -185,7 +187,7 @@ export const fetchCourseOverview = createAsyncThunk(
       const data = await studentApi.getCourseOverview(courseId)
       return data
     } catch (error: any) {
-      return rejectWithValue(error?.response?.data?.detail || 'Failed to load course details')
+      return rejectWithValue(getErrorMessage(error))
     }
   }
 )
@@ -196,7 +198,7 @@ export const fetchCourseExams = createAsyncThunk(
     try {
       return await studentApi.getCourseExams(courseId)
     } catch (error: any) {
-      return rejectWithValue(error?.response?.data?.detail || 'Failed to load course exams')
+      return rejectWithValue(getErrorMessage(error))
     }
   }
 )
@@ -207,7 +209,7 @@ export const fetchSubCourseExams = createAsyncThunk(
     try {
       return await studentApi.getSubCourseExams(subCourseId)
     } catch (error: any) {
-      return rejectWithValue(error?.response?.data?.detail || 'Failed to load sub-course exams')
+      return rejectWithValue(getErrorMessage(error))
     }
   }
 )
@@ -219,7 +221,7 @@ export const enrollFreeSubCourseThunk = createAsyncThunk(
       const response = await studentApi.enrollFreeSubCourse(subCourseId)
       return { subCourseId, ...response }
     } catch (error: any) {
-      return rejectWithValue(error?.response?.data?.detail || 'Failed to enroll in free sub-course')
+      return rejectWithValue(getErrorMessage(error))
     }
   }
 )
@@ -231,7 +233,7 @@ export const enrollFreeCourseThunk = createAsyncThunk(
       const response = await studentApi.enrollFreeCourse(courseId)
       return { courseId, ...response }
     } catch (error: any) {
-      return rejectWithValue(error?.response?.data?.detail || 'Failed to enroll in free course')
+      return rejectWithValue(getErrorMessage(error))
     }
   }
 )
@@ -243,7 +245,7 @@ export const enrollFreeVideoCourseThunk = createAsyncThunk(
       const response = await studentApi.enrollFreeVideoCourse(courseId)
       return { courseId, ...response }
     } catch (error: any) {
-      return rejectWithValue(error?.response?.data?.detail || 'Failed to enroll in free video course')
+      return rejectWithValue(getErrorMessage(error))
     }
   }
 )
@@ -255,7 +257,7 @@ export const enrollFreeModuleThunk = createAsyncThunk(
       const response = await studentApi.enrollFreeVideoModule(moduleId)
       return { moduleId, ...response }
     } catch (error: any) {
-      return rejectWithValue(error?.response?.data?.detail || 'Failed to enroll in free video module')
+      return rejectWithValue(getErrorMessage(error))
     }
   }
 )
@@ -267,7 +269,7 @@ export const deleteCourse = createAsyncThunk(
       await adminApi.deleteCourse(id)
       return id
     } catch (error: any) {
-      return rejectWithValue(error?.response?.data?.detail || 'Failed to delete course')
+      return rejectWithValue(getErrorMessage(error))
     }
   }
 )
@@ -278,7 +280,7 @@ export const uploadImageThunk = createAsyncThunk(
     try {
       return await adminApi.uploadImage(file, entity)
     } catch (error: any) {
-      return rejectWithValue(error?.response?.data?.detail || 'Failed to upload image')
+      return rejectWithValue(getErrorMessage(error))
     }
   }
 )
@@ -289,7 +291,7 @@ export const deleteImageThunk = createAsyncThunk(
     try {
       return await adminApi.deleteImage(publicId)
     } catch (error: any) {
-      return rejectWithValue(error?.response?.data?.detail || 'Failed to delete image')
+      return rejectWithValue(getErrorMessage(error))
     }
   }
 )

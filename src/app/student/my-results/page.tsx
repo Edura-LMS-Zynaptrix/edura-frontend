@@ -29,7 +29,9 @@ export default function ResultsPage() {
   const { attempts, loadingAttempts, progress, loadingProgress } = useAppSelector((state) => state.studentDashboard)
 
   const [mounted, setMounted] = useState(false)
-  const [activeTab, setActiveTab ] = useState<'list' | 'analytics'>('analytics')
+  // Defaults to the list tab — Edura has no aggregate cross-course progress
+  // endpoint, so the analytics tab has nothing to show until that exists.
+  const [activeTab, setActiveTab ] = useState<'list' | 'analytics'>('list')
   const [selectedSubject, setSelectedSubject] = useState<string | null>(null)
 
   useEffect(() => { setMounted(true) }, [])

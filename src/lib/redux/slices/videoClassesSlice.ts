@@ -1,6 +1,7 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit'
 import * as adminApi from '@/lib/api/admin'
 import * as studentApi from '@/lib/api/student'
+import { getErrorMessage } from '@/lib/utils'
 
 interface VideoClassesState {
     currentVideoClass: studentApi.Course | null
@@ -27,7 +28,7 @@ export const fetchVideoClassDetails = createAsyncThunk(
         try {
             return await studentApi.getVideoClassDetails(courseId)
         } catch (error: any) {
-            return rejectWithValue(error?.response?.data?.detail || 'Failed to load video class details')
+            return rejectWithValue(getErrorMessage(error))
         }
     }
 )
@@ -38,7 +39,7 @@ export const updateProgress = createAsyncThunk(
         try {
             return await studentApi.updateVideoProgress(data)
         } catch (error: any) {
-            return rejectWithValue(error?.response?.data?.detail || 'Failed to update progress')
+            return rejectWithValue(getErrorMessage(error))
         }
     }
 )
@@ -50,7 +51,7 @@ export const createModuleAction = createAsyncThunk(
         try {
             return await adminApi.createModule(data)
         } catch (error: any) {
-            return rejectWithValue(error?.response?.data?.detail || 'Failed to create module')
+            return rejectWithValue(getErrorMessage(error))
         }
     }
 )
@@ -61,7 +62,7 @@ export const createVideoAction = createAsyncThunk(
         try {
             return await adminApi.createVideo(data)
         } catch (error: any) {
-            return rejectWithValue(error?.response?.data?.detail || 'Failed to add video')
+            return rejectWithValue(getErrorMessage(error))
         }
     }
 )

@@ -115,10 +115,13 @@ export default function ModuleContentPage() {
   const loadData = async () => {
     try {
       setLoadingContent(true)
-      const [moduleData, videosData] = await Promise.all([
-        adminApi.getModule(moduleId),
-        adminApi.getVideos(moduleId),
+      // getModule(id) has no backing endpoint — course_service only lists
+      // modules per course, so find this one in that list instead.
+      const [modulesData, videosData] = await Promise.all([
+        adminApi.getModulesForCourse(courseId),
+        adminApi.getVideosForModule(courseId, moduleId),
       ])
+      const moduleData = modulesData.find((m: any) => String(m.id) === String(moduleId)) ?? null
       setModule(moduleData)
 
       // For each video, fetch its materials
@@ -190,9 +193,9 @@ export default function ModuleContentPage() {
       }
 
       if (editingVideo) {
-        await adminApi.updateVideo(editingVideo.id, data)
+        await adminApi.updateVideoForModule(courseId, moduleId, editingVideo.id, data)
       } else {
-        await adminApi.createVideo(data)
+        await adminApi.createVideoForModule(courseId, data)
       }
 
       setShowVideoModal(false)
@@ -207,7 +210,7 @@ export default function ModuleContentPage() {
   const handleDeleteVideo = async (video: any) => {
     if (!window.confirm(`Delete video "${video.title}"?`)) return
     try {
-      await adminApi.deleteVideo(video.id)
+      await adminApi.deleteVideoForModule(courseId, moduleId, video.id)
       loadData()
     } catch (err: any) {
       alert(getErrorMessage(err) || 'Delete failed')

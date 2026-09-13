@@ -549,7 +549,7 @@ function mapAdminCourse(c: any): any {
     subject: '',
     grade: 0,
     course_type: 'video',
-    image_url: null,
+    image_url: c.thumbnail_url ?? null,
     price: Number(c.price ?? 0),
     description: c.description ?? null,
     is_active: c.status === 'PUBLISHED',
@@ -577,6 +577,7 @@ export const createCourse = async (data: {
     title: data.title,
     description: data.description,
     price: data.price,
+    thumbnail_url: data.image_url,
   })
   return mapAdminCourse(response.data)
 }
@@ -596,6 +597,7 @@ export const updateCourse = async (id: string, data: {
     title: data.title,
     description: data.description,
     price: data.price,
+    thumbnail_url: data.image_url,
   })
   return mapAdminCourse(response.data)
 }
@@ -623,20 +625,51 @@ export const deleteSubCourse = async (_id: string): Promise<any> => {
   throw new Error('Sub-courses are not supported by the Edura backend.')
 }
 
-// Exam Management — assessment_service has no admin CRUD endpoints at all
-// (only get-by-id, start, submit, violations); assessments/questions can
-// only be seeded directly in the database today.
+// Exam Management (real: assessment_service)
 
-export const getExams = async (_courseId?: string) => {
-  return []
+function mapAdminExam(a: any): any {
+  return {
+    id: String(a.id),
+    course_id: String(a.course_id),
+    sub_course_id: null,
+    title: a.title,
+    image_url: null,
+    description: a.description ?? null,
+    duration_minutes: a.time_limit_minutes ?? 0,
+    total_questions: 0, // not tracked on the assessment itself
+    price: 0, // exams aren't priced separately from their course in Edura
+    order_number: 0,
+    scheduled_start: null,
+    is_published: a.is_published,
+  }
 }
 
-export const createExam = async (_data: ExamCreateData): Promise<any> => {
-  throw new Error('Creating exams is not supported by the Edura backend yet.')
+export const getExams = async (courseId?: string) => {
+  if (!courseId) return []
+  const response = await apiClient.get('/api/assessments/', { params: { course_id: courseId } })
+  return response.data.map(mapAdminExam)
 }
 
-export const updateExam = async (_id: string, _data: ExamUpdateData): Promise<any> => {
-  throw new Error('Updating exams is not supported by the Edura backend yet.')
+export const createExam = async (data: ExamCreateData): Promise<any> => {
+  const response = await apiClient.post('/api/assessments/', {
+    course_id: Number(data.course_id),
+    title: data.title,
+    description: data.description,
+    assessment_type: 'exam',
+    time_limit_minutes: data.duration_minutes,
+    is_published: data.is_published,
+  })
+  return mapAdminExam(response.data)
+}
+
+export const updateExam = async (id: string, data: ExamUpdateData): Promise<any> => {
+  const response = await apiClient.put(`/api/assessments/${id}`, {
+    title: data.title,
+    description: data.description,
+    time_limit_minutes: data.duration_minutes,
+    is_published: data.is_published,
+  })
+  return mapAdminExam(response.data)
 }
 
 export interface ZipUploadResult {
@@ -650,8 +683,9 @@ export const uploadQuestionImagesZip = async (_examId: string, _file: File): Pro
   throw new Error('Bulk question image upload is not supported by the Edura backend yet.')
 }
 
-export const deleteExam = async (_id: string): Promise<any> => {
-  throw new Error('Deleting exams is not supported by the Edura backend yet.')
+export const deleteExam = async (id: string): Promise<any> => {
+  await apiClient.delete(`/api/assessments/${id}`)
+  return { message: 'Exam deleted' }
 }
 
 // Image / File Management (real: content_service, teacher/admin only)
@@ -683,26 +717,62 @@ export const uploadFile = async (file: File, entity: string = 'materials') => {
   return uploadImage(file, entity)
 }
 
-// Question Management — no REST endpoints exist on assessment_service.
+// Question Management (real: assessment_service)
 
-export const getQuestions = async (_examId: string) => {
-  return []
+function mapAdminQuestion(q: any): any {
+  const options = (q.options as string[]) ?? []
+  return {
+    id: String(q.id),
+    exam_id: String(q.assessment_id),
+    question_text: q.question_text,
+    question_image_url: null,
+    question_image_public_id: null,
+    explanation: null,
+    video_url: null,
+    order_number: q.position,
+    options: options.map((text: string, idx: number) => ({
+      id: `${q.id}-${idx}`,
+      option_text: text,
+      option_image_url: null,
+      option_image_public_id: null,
+      is_correct: text === q.correct_answer,
+      order_number: idx,
+    })),
+  }
+}
+
+export const getQuestions = async (examId: string) => {
+  const response = await apiClient.get(`/api/assessments/${examId}/questions`)
+  return response.data.map(mapAdminQuestion)
 }
 
 export const getQuestion = async (_id: string): Promise<any> => {
-  throw new Error('Question management is not supported by the Edura backend yet.')
+  throw new Error('Fetching a single question by id is not supported — list questions for its exam instead.')
 }
 
-export const createQuestion = async (_data: QuestionCreateData): Promise<any> => {
-  throw new Error('Question management is not supported by the Edura backend yet.')
+export const createQuestion = async (data: QuestionCreateData): Promise<any> => {
+  const response = await apiClient.post(`/api/assessments/${data.exam_id}/questions`, {
+    question_text: data.question_text,
+    question_type: 'mcq',
+    options: data.options.map((o) => ({ option_text: o.option_text ?? '', is_correct: o.is_correct })),
+    marks: 1,
+    position: data.order_number,
+  })
+  return mapAdminQuestion(response.data)
 }
 
-export const updateQuestion = async (_id: string, _data: QuestionUpdateData): Promise<any> => {
-  throw new Error('Question management is not supported by the Edura backend yet.')
+export const updateQuestion = async (id: string, data: QuestionUpdateData): Promise<any> => {
+  const response = await apiClient.put(`/api/assessments/questions/${id}`, {
+    question_text: data.question_text,
+    options: data.options?.map((o: any) => ({ option_text: o.option_text ?? '', is_correct: o.is_correct })),
+    position: data.order_number,
+  })
+  return mapAdminQuestion(response.data)
 }
 
-export const deleteQuestion = async (_id: string): Promise<any> => {
-  throw new Error('Question management is not supported by the Edura backend yet.')
+export const deleteQuestion = async (id: string): Promise<any> => {
+  await apiClient.delete(`/api/assessments/questions/${id}`)
+  return { message: 'Question deleted' }
 }
 
 export const importQuestionsCSV = async (_examId: string, _file: File): Promise<any> => {
@@ -760,7 +830,20 @@ export const createModule = async (data: ModuleCreateData) => {
 }
 
 export const updateModule = async (_id: string, _data: ModuleUpdateData): Promise<any> => {
-  throw new Error('course_service has no endpoint to update an existing module.')
+  throw new Error('Use updateModuleForCourse(courseId, id, data) — Edura scopes modules under a course.')
+}
+
+export const updateModuleForCourse = async (courseId: string, moduleId: string, data: ModuleUpdateData) => {
+  const response = await apiClient.put(`/api/courses/${courseId}/modules/${moduleId}`, {
+    title: data.title,
+    order: data.order_number,
+  })
+  return response.data
+}
+
+export const deleteModuleForCourse = async (courseId: string, moduleId: string) => {
+  await apiClient.delete(`/api/courses/${courseId}/modules/${moduleId}`)
+  return { message: 'Module deleted' }
 }
 
 export const getVideos = async (_moduleId: string): Promise<any> => {
@@ -789,11 +872,31 @@ export const createVideoForModule = async (courseId: string, data: VideoCreateDa
 }
 
 export const updateVideo = async (_id: string, _data: VideoUpdateData): Promise<any> => {
-  throw new Error('course_service has no endpoint to update an existing lesson.')
+  throw new Error('Use updateVideoForModule(courseId, moduleId, id, data) — Edura scopes lessons under a course.')
+}
+
+export const updateVideoForModule = async (
+  courseId: string,
+  moduleId: string,
+  lessonId: string,
+  data: VideoUpdateData
+) => {
+  const response = await apiClient.put(`/api/courses/${courseId}/modules/${moduleId}/lessons/${lessonId}`, {
+    title: data.title,
+    youtube_video_id: data.yt_video_id,
+    duration_seconds: data.duration_seconds,
+    order: data.order_number,
+  })
+  return response.data
 }
 
 export const deleteVideo = async (_id: string): Promise<any> => {
-  throw new Error('course_service has no endpoint to delete a lesson.')
+  throw new Error('Use deleteVideoForModule(courseId, moduleId, id) — Edura scopes lessons under a course.')
+}
+
+export const deleteVideoForModule = async (courseId: string, moduleId: string, lessonId: string) => {
+  await apiClient.delete(`/api/courses/${courseId}/modules/${moduleId}/lessons/${lessonId}`)
+  return { message: 'Video deleted' }
 }
 
 export const getMaterials = async (_moduleId: string) => {

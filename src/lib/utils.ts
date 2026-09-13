@@ -2,18 +2,35 @@
 
 /**
  * Extracts a readable error message from Axios/FastAPI error responses.
- * Handles Pydantic validation error shapes (object with msg, array of errors).
+ * Every Edura microservice raises HTTPException(detail={"error": "CODE",
+ * "message": "..."}) for business errors, so `.message` is checked first;
+ * `.msg` (and the array form) covers Pydantic validation error shapes.
+ * Falls back to a plain Error's own `.message` for calls that reject
+ * locally (e.g. "not supported by the Edura backend yet") rather than via
+ * a failed HTTP request.
  */
 export function getErrorMessage(err: any): string {
+  // Some older thunks reject with an already-extracted string, or with the
+  // raw {error, message} object Edura returns — both reach this function
+  // directly via .unwrap(), not wrapped in an Axios error.
+  if (typeof err === 'string') return err
+  if (err && typeof err === 'object' && typeof err.message === 'string' && !err.response) {
+    return err.message
+  }
+
   const detail = err?.response?.data?.detail
   if (detail) {
     if (typeof detail === 'string') return detail
-    if (typeof detail === 'object' && !Array.isArray(detail) && detail.msg) return detail.msg
+    if (typeof detail === 'object' && !Array.isArray(detail)) {
+      if (detail.message) return detail.message
+      if (detail.msg) return detail.msg
+    }
     if (Array.isArray(detail)) {
       const messages = detail.map((e: any) => e.msg || JSON.stringify(e)).join('; ')
       return messages || 'Validation error occurred'
     }
   }
+  if (typeof err?.message === 'string' && err.message) return err.message
   return 'An error occurred'
 }
 

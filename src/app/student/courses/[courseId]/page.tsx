@@ -3,9 +3,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
-import { 
-  fetchCourseOverview, 
-  enrollFreeSubCourseThunk, 
+import {
+  fetchCourseOverview,
+  fetchCourseExams,
+  enrollFreeSubCourseThunk,
   enrollFreeCourseThunk,
   enrollFreeVideoCourseThunk,
   enrollFreeModuleThunk
@@ -22,7 +23,7 @@ export default function CourseOverviewPage() {
   const courseId = params?.courseId as string
   const dispatch = useAppDispatch()
 
-  const { currentCourse: course, studentLoading: loading, studentError: error } = useAppSelector(state => state.courses)
+  const { currentCourse: course, currentCourseExams: exams, studentLoading: loading, studentError: error } = useAppSelector(state => state.courses)
   const { streams } = useAppSelector(state => state.admin)
   const { isAuthenticated, needsProfileCompletion } = useAppSelector(state => state.auth)
 
@@ -50,6 +51,7 @@ export default function CourseOverviewPage() {
   useEffect(() => {
     if (courseId) {
       dispatch(fetchCourseOverview(courseId))
+      dispatch(fetchCourseExams(courseId))
     }
   }, [dispatch, courseId])
 
@@ -240,8 +242,6 @@ export default function CourseOverviewPage() {
               <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
               <div className="absolute bottom-3 left-3 right-3 sm:bottom-4 sm:left-5 sm:right-5 flex flex-wrap items-end justify-between gap-2">
                 <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-                  <span className="text-[11px] sm:text-xs font-semibold text-white/80 bg-white/20 backdrop-blur-sm px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full">{course.subject}</span>
-                  <span className="text-[11px] sm:text-xs font-semibold text-white/80 bg-white/20 backdrop-blur-sm px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full">Grade {course.grade}</span>
                   {course.stream_ids && course.stream_ids.length > 0 && (
                     <div className="flex flex-wrap gap-1">
                       {course.stream_ids.map(sid => (
@@ -264,8 +264,6 @@ export default function CourseOverviewPage() {
             <div className="relative h-32 rounded-xl overflow-hidden mb-5 bg-gradient-to-br from-teal-500 to-teal-700">
               <div className="absolute bottom-3 left-3 right-3 sm:bottom-4 sm:left-5 sm:right-5 flex flex-wrap items-end justify-between gap-2">
                 <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-                  <span className="text-[11px] sm:text-xs font-semibold text-white/80 bg-white/20 backdrop-blur-sm px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full">{course.subject}</span>
-                  <span className="text-[11px] sm:text-xs font-semibold text-white/80 bg-white/20 backdrop-blur-sm px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full">Grade {course.grade}</span>
                   {course.stream_ids && course.stream_ids.length > 0 && (
                     <div className="flex flex-wrap gap-1">
                       {course.stream_ids.map(sid => (
@@ -360,6 +358,56 @@ export default function CourseOverviewPage() {
           </div>
         </div>
       </div>
+
+      {/* Assessments — Edura attaches assessments directly to a course
+          (no sub-course grouping), so this always shows alongside modules. */}
+      {exams.length > 0 && (
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 pt-10">
+          <h2 className="text-lg font-bold text-gray-900 mb-4">Assessments</h2>
+          <div className="bg-white rounded-2xl border border-gray-200 divide-y divide-gray-50">
+            {exams.map((exam) => {
+              const isAccessible = course.is_enrolled || exam.is_enrolled
+              return (
+                <div key={exam.id} className="flex items-center gap-3 px-4 sm:px-5 py-3 hover:bg-gray-50/80 transition-colors">
+                  <div className="w-10 h-10 rounded-xl shrink-0 bg-gray-100 flex items-center justify-center">
+                    <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h4 className="text-sm font-medium text-gray-900 truncate">{exam.title}</h4>
+                    <div className="text-[11px] sm:text-xs text-gray-400">
+                      {exam.duration_minutes > 0 ? `${exam.duration_minutes} Minutes` : 'No time limit'}
+                    </div>
+                  </div>
+                  <div className="shrink-0">
+                    {isAccessible ? (
+                      ongoingMap[exam.id] ? (
+                        <button
+                          onClick={() => handleStartExam(exam.id)}
+                          className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5"
+                        >
+                          <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
+                          {String(Math.floor(ongoingMap[exam.id].secondsLeft / 60)).padStart(2, '0')}:{String(ongoingMap[exam.id].secondsLeft % 60).padStart(2, '0')}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleStartExam(exam.id)}
+                          className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-semibold transition-colors"
+                        >
+                          Start
+                        </button>
+                      )
+                    ) : (
+                      <span className="text-xs text-gray-400 font-medium">Enroll to unlock</span>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Modules & Content */}
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-10">

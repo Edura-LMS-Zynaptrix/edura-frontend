@@ -1,8 +1,9 @@
 import { createSlice, PayloadAction, createAsyncThunk } from '@reduxjs/toolkit'
-import { 
-  login as apiLogin, 
-  register as apiRegister, 
+import {
+  login as apiLogin,
+  register as apiRegister,
   getCurrentUser,
+  createProfile as apiCreateProfile,
   updateProfile as apiUpdateProfile,
   updateProfilePhoto as apiUpdateProfilePhoto,
   forgotPassword as apiForgotPassword,
@@ -80,14 +81,7 @@ export const register = createAsyncThunk(
       const response = await apiRegister(data)
       return response
     } catch (error: any) {
-      const detail = error?.response?.data?.detail
-      const message =
-        typeof detail === 'string'
-          ? detail
-          : Array.isArray(detail)
-            ? detail.map((d: any) => d?.msg).filter(Boolean).join(', ')
-            : error?.message || 'Registration failed'
-      return rejectWithValue(message)
+      return rejectWithValue(getErrorMessage(error))
     }
   }
 )
@@ -110,6 +104,19 @@ export const changePassword = createAsyncThunk(
     try {
       const response = await apiChangePassword(data)
       return response
+    } catch (error: any) {
+      return rejectWithValue(getErrorMessage(error))
+    }
+  }
+)
+
+// Must run once, right after the very first login following registration —
+// auth_service's /register never creates a profile itself.
+export const createProfile = createAsyncThunk(
+  'auth/createProfile',
+  async (data: { first_name: string; last_name: string; mobile_no?: string }, { rejectWithValue }) => {
+    try {
+      return await apiCreateProfile(data)
     } catch (error: any) {
       return rejectWithValue(getErrorMessage(error))
     }
@@ -306,6 +313,21 @@ const authSlice = createSlice({
         state.needsProfileCompletion = action.payload.needs_profile_completion
       })
       .addCase(googleLoginThunk.rejected, (state, action) => {
+        state.isLoading = false
+        state.error = action.payload as string
+      })
+      // Create profile
+      .addCase(createProfile.pending, (state) => {
+        state.isLoading = true
+        state.error = null
+      })
+      .addCase(createProfile.fulfilled, (state, action) => {
+        state.isLoading = false
+        if (state.user) {
+          state.user = { ...state.user, profile: action.payload, full_name: action.payload.name }
+        }
+      })
+      .addCase(createProfile.rejected, (state, action) => {
         state.isLoading = false
         state.error = action.payload as string
       })

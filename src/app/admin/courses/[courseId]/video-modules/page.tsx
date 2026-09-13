@@ -256,13 +256,9 @@ export default function CourseVideoModulesPage() {
         }
       }
 
-      await adminApi.updateModule(editingId, {
+      await adminApi.updateModuleForCourse(courseId, editingId, {
         title: title,
-        description: finalDescription,
         order_number: orderNumber,
-        is_active: formConfig.is_active,
-        image_url: imageUrl,
-        image_public_id: imagePublicId,
       })
 
       closeEditModal()
@@ -280,21 +276,8 @@ export default function CourseVideoModulesPage() {
 
     try {
       setLocalError('')
-      if (item.image_public_id) {
-        await deleteImageFromCloudinary(item.image_public_id)
-      }
-      
-      const response = await fetch(`/api/v1/admin/modules/${item.id}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-      })
-      
-      if (response.ok) {
-        fetchModules()
-      } else {
-        const data = await response.json()
-        setLocalError(data.detail || 'Failed to delete module')
-      }
+      await adminApi.deleteModuleForCourse(courseId, item.id)
+      fetchModules()
     } catch (err: any) {
       setLocalError(getErrorMessage(err) || 'Failed to delete module')
     }

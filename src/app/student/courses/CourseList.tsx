@@ -102,29 +102,6 @@ function FilterPanel({
         </div>
       </div>
 
-      {/* Grade */}
-      <div>
-        <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Grade</h3>
-        <div className="flex flex-wrap gap-2">
-          {GRADES.map((g) => {
-            const active = selectedGrades.includes(g)
-            return (
-              <button
-                key={g}
-                onClick={() => onGradeToggle(g)}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
-                  active
-                    ? 'bg-teal-600 text-white border-teal-600'
-                    : 'bg-white text-gray-700 border-gray-200 hover:border-teal-400 hover:text-teal-600'
-                }`}
-              >
-                Grade {g}
-              </button>
-            )
-          })}
-        </div>
-      </div>
-
       {/* Subject */}
       {subjects.length > 0 && (
         <div>
@@ -163,7 +140,8 @@ export default function CourseList() {
 
   const isVideoSection = pathname.includes('video-courses')
   const sectionTitle = isVideoSection ? 'Video Courses' : 'Exam Courses'
-  const filterType = isVideoSection ? 'video' : 'exam'
+  // Edura doesn't split courses into "video" vs "exam" types — a course can
+  // hold both lessons and assessments — so both tabs show the same catalog.
 
   // Filters
   const [search, setSearch] = useState('')
@@ -196,15 +174,17 @@ export default function CourseList() {
       .catch(() => {})
   }, [isAuthenticated])
 
-  // Unique subjects derived from courses
+  // Unique subjects derived from courses — Edura courses don't carry a
+  // subject field today, so this naturally stays empty and the Subject
+  // filter section (conditionally rendered) just doesn't show.
   const subjects = useMemo(
-    () => [...new Set(courses.map((c) => c.subject))].sort(),
+    () => [...new Set(courses.map((c) => c.subject).filter(Boolean))].sort(),
     [courses]
   )
 
   // Filter + sort
   const filtered = useMemo(() => {
-    let list = courses.filter(c => (c.course_type || 'exam') === filterType)
+    let list = [...courses]
     const q = search.trim().toLowerCase()
     if (q) list = list.filter((c) => c.title.toLowerCase().includes(q) || c.subject.toLowerCase().includes(q))
     if (selectedGrades.length) list = list.filter((c) => selectedGrades.includes(c.grade))

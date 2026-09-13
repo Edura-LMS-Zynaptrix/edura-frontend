@@ -109,6 +109,17 @@ export const getCurrentUser = async (): Promise<CurrentUser> => {
   }
 }
 
+// Creates the profile for the currently authenticated user. auth_service's
+// /register only creates the login record — this is the required follow-up
+// call so the account has a name before it's used anywhere else.
+export const createProfile = async (
+  data: Pick<UserProfile, 'first_name' | 'last_name'> &
+    Partial<Pick<UserProfile, 'mobile_no' | 'date_of_birth' | 'bio' | 'avatar_url'>>
+): Promise<UserProfile> => {
+  const response = await apiClient.post('/api/users/', data)
+  return response.data
+}
+
 export const updateProfile = async (
   data: Partial<Pick<UserProfile, 'first_name' | 'last_name' | 'mobile_no' | 'date_of_birth' | 'bio' | 'avatar_url'>>
 ) => {
@@ -120,10 +131,13 @@ export const updateProfile = async (
   return response.data as UserProfile
 }
 
-// Edura has no image-upload endpoint reachable by students (content_service's
-// /upload is teacher/admin only), so profile photos can't be uploaded today.
-export const updateProfilePhoto = async (_data: FormData): Promise<never> => {
-  throw new Error('Profile photo upload is not supported by the Edura backend yet — set avatar_url directly instead.')
+// Uploads the photo to Cloudinary via content_service's self-service /avatar
+// endpoint, then persists the returned URL onto the user's profile.
+export const updateProfilePhoto = async (data: FormData): Promise<UserProfile> => {
+  const uploadResponse = await apiClient.post('/api/content/avatar', data, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+  return updateProfile({ avatar_url: uploadResponse.data.secure_url })
 }
 
 // ── Password management ──────────────────────────────────────────────────

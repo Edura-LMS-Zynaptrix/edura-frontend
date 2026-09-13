@@ -332,7 +332,7 @@ function mapCourse(c: any): Course {
     title: c.title,
     subject: '',
     grade: 0,
-    image_url: null,
+    image_url: c.thumbnail_url ?? null,
     description: c.description ?? null,
     price: Number(c.price ?? 0),
     is_active: c.status === 'PUBLISHED',
@@ -393,10 +393,37 @@ export const getCourseOverview = async (courseId: string): Promise<Course> => {
   return course
 }
 
-// Edura's assessment_service has no "list assessments for a course" endpoint,
-// so per-course exam listings can't be wired to real data.
-export const getCourseExams = async (_courseId: string): Promise<ExamWithAccess[]> => {
-  return []
+export const getCourseExams = async (courseId: string): Promise<ExamWithAccess[]> => {
+  const decoded = getDecodedToken()
+  const response = await apiClient.get('/api/assessments/', { params: { course_id: courseId } })
+
+  let isEnrolled = true
+  if (decoded?.role === 'student') {
+    try {
+      const enrollRes = await apiClient.get('/api/enrollments', {
+        params: { student_id: decoded.sub, course_id: courseId },
+      })
+      isEnrolled = enrollRes.data?.status === 'ACTIVE'
+    } catch {
+      isEnrolled = false
+    }
+  }
+
+  return response.data.map((a: any) => ({
+    id: String(a.id),
+    title: a.title,
+    description: a.description ?? null,
+    image_url: null,
+    duration_minutes: a.time_limit_minutes ?? 0,
+    total_questions: 0, // not known until the session starts
+    is_free: false,
+    is_enrolled: isEnrolled,
+    enrollment_type: isEnrolled ? 'course' : null,
+    already_attempted: false, // assessment_service has no "my submissions" lookup
+    last_score: null,
+    last_total: null,
+    scheduled_start: null,
+  }))
 }
 
 // No sub-course concept exists in Edura.
@@ -614,9 +641,27 @@ export interface RankingExam {
   subject: string
 }
 
+// No single endpoint enumerates assessments across every course, so this
+// composes one from the two real endpoints that do exist: list published
+// courses, then list each course's published assessments.
 export const getRankingExams = async (): Promise<RankingExam[]> => {
-  // No endpoint enumerates assessments across courses.
-  return []
+  const courses = await getAvailableCourses()
+  const perCourse = await Promise.all(
+    courses.map(async (c) => {
+      try {
+        const res = await apiClient.get('/api/assessments/', { params: { course_id: c.id } })
+        return res.data.map((a: any) => ({
+          exam_id: String(a.id),
+          exam_title: a.title,
+          course_title: c.title,
+          subject: c.subject,
+        }))
+      } catch {
+        return []
+      }
+    })
+  )
+  return perCourse.flat()
 }
 
 export const getRankingsLeaderboard = async (
