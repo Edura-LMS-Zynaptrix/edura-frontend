@@ -1,25 +1,16 @@
-// Edura's auth_service has no Google OAuth endpoint (only an unused Asgardeo
-// SSO config placeholder) — these calls have nothing to reach.
+import apiClient from './client'
+
+// auth_service's /google endpoint verifies an OAuth *access token* against
+// Google's userinfo endpoint (the @react-oauth/google `flow: 'implicit'`
+// shape used on the login/register pages) — not a one-tap id_token.
 
 interface GoogleLoginResponse {
   access_token: string
-  refresh_token: string
+  refresh_token: string // always '' — issued as an HttpOnly cookie, same as email/password login
   token_type: string
-  needs_profile_completion: boolean
 }
 
-export const googleLogin = async (_idToken: string): Promise<GoogleLoginResponse> => {
-  throw new Error('Google sign-in is not supported by the Edura backend yet.')
-}
-
-export const completeGoogleProfile = async (_profileData: {
-  phone_number: string
-  school: string
-  district: string
-  grade: number
-  stream_id?: string | null
-  selected_subjects: string[]
-  referral_code?: string
-}): Promise<{ message: string }> => {
-  throw new Error('Google sign-in is not supported by the Edura backend yet.')
+export const googleLogin = async (accessToken: string): Promise<GoogleLoginResponse> => {
+  const response = await apiClient.post('/api/auth/google', { access_token: accessToken })
+  return { ...response.data, refresh_token: '' }
 }

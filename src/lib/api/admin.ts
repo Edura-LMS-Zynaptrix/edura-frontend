@@ -470,7 +470,7 @@ export const getAdminRankings = async (params?: {
   }
 }
 
-// Stream Management — no such concept exists in Edura.
+// Stream Management (real: user_service)
 
 export interface AdminStream {
   id: string
@@ -495,27 +495,45 @@ export interface StreamUpdateData {
   is_active?: boolean
 }
 
+function mapAdminStream(s: any): AdminStream {
+  return {
+    id: String(s.id),
+    name: s.name,
+    subjects: s.subjects,
+    description: s.description ?? null,
+    is_active: s.is_active,
+    created_at: s.created_at,
+    updated_at: null,
+  }
+}
+
 export const getStreams = async (): Promise<AdminStream[]> => {
-  return []
+  const response = await apiClient.get('/api/users/streams', { params: { active_only: false } })
+  return response.data.map(mapAdminStream)
 }
 
-export const getStream = async (_id: string): Promise<AdminStream> => {
-  throw new Error('Streams are not supported by the Edura backend.')
+export const getStream = async (id: string): Promise<AdminStream> => {
+  const all = await getStreams()
+  const found = all.find((s) => s.id === id)
+  if (!found) throw new Error('Stream not found')
+  return found
 }
 
-export const createStream = async (_data: StreamCreateData): Promise<AdminStream> => {
-  throw new Error('Streams are not supported by the Edura backend.')
+export const createStream = async (data: StreamCreateData): Promise<AdminStream> => {
+  const response = await apiClient.post('/api/users/streams', data)
+  return mapAdminStream(response.data)
 }
 
-export const updateStream = async (_id: string, _data: StreamUpdateData): Promise<AdminStream> => {
-  throw new Error('Streams are not supported by the Edura backend.')
+export const updateStream = async (id: string, data: StreamUpdateData): Promise<AdminStream> => {
+  const response = await apiClient.put(`/api/users/streams/${id}`, data)
+  return mapAdminStream(response.data)
 }
 
-export const deleteStream = async (_id: string): Promise<void> => {
-  throw new Error('Streams are not supported by the Edura backend.')
+export const deleteStream = async (id: string): Promise<void> => {
+  await apiClient.delete(`/api/users/streams/${id}`)
 }
 
-// Grade Subject Management — no such concept exists in Edura.
+// Grade Subject Management (real: user_service)
 
 export interface GradeSubject {
   id: string
@@ -526,20 +544,34 @@ export interface GradeSubject {
   updated_at: string | null
 }
 
-export const getGradeSubjects = async (_grade?: number): Promise<GradeSubject[]> => {
-  return []
+function mapGradeSubject(s: any): GradeSubject {
+  return {
+    id: String(s.id),
+    name: s.name,
+    grade: s.grade,
+    is_active: s.is_active,
+    created_at: s.created_at,
+    updated_at: null,
+  }
 }
 
-export const createGradeSubject = async (_data: { name: string; grade: number; is_active?: boolean }): Promise<GradeSubject> => {
-  throw new Error('Grade subjects are not supported by the Edura backend.')
+export const getGradeSubjects = async (grade?: number): Promise<GradeSubject[]> => {
+  const response = await apiClient.get('/api/users/grade-subjects', { params: { grade, active_only: false } })
+  return response.data.map(mapGradeSubject)
 }
 
-export const updateGradeSubject = async (_id: string, _data: { name?: string; is_active?: boolean }): Promise<GradeSubject> => {
-  throw new Error('Grade subjects are not supported by the Edura backend.')
+export const createGradeSubject = async (data: { name: string; grade: number; is_active?: boolean }): Promise<GradeSubject> => {
+  const response = await apiClient.post('/api/users/grade-subjects', data)
+  return mapGradeSubject(response.data)
 }
 
-export const deleteGradeSubject = async (_id: string): Promise<void> => {
-  throw new Error('Grade subjects are not supported by the Edura backend.')
+export const updateGradeSubject = async (id: string, data: { name?: string; is_active?: boolean }): Promise<GradeSubject> => {
+  const response = await apiClient.put(`/api/users/grade-subjects/${id}`, data)
+  return mapGradeSubject(response.data)
+}
+
+export const deleteGradeSubject = async (id: string): Promise<void> => {
+  await apiClient.delete(`/api/users/grade-subjects/${id}`)
 }
 
 // Course Management (real: course_service)

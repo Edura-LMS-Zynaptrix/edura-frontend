@@ -716,8 +716,12 @@ export const getPlatformStats = async (): Promise<PlatformStats> => {
   return { total_students: 0, total_courses: 0, total_exams: 0, total_attempts: 0, top_courses: [] }
 }
 
-export const getSubjects = async (_grade?: number, _stream_id?: string | null): Promise<string[]> => {
-  return []
+export const getSubjects = async (grade?: number, stream_id?: string | null): Promise<string[]> => {
+  if (grade === undefined || grade === null) return []
+  const response = await apiClient.get('/api/users/subjects', {
+    params: { grade, stream_id: stream_id || undefined },
+  })
+  return response.data
 }
 
 export interface ReferralSummary {
@@ -766,7 +770,14 @@ export interface Stream {
 }
 
 export const getStreams = async (): Promise<Stream[]> => {
-  return []
+  const response = await apiClient.get('/api/users/streams')
+  return response.data.map((s: any) => ({
+    id: String(s.id),
+    name: s.name,
+    subjects: s.subjects,
+    description: s.description ?? null,
+    is_active: s.is_active,
+  }))
 }
 
 export const getMyProgress = async (): Promise<StudentProgressData> => {

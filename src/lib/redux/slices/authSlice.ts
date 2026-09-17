@@ -11,7 +11,7 @@ import {
   setPassword as apiSetPassword,
   changePassword as apiChangePassword,
 } from '@/lib/api/auth'
-import { googleLogin as apiGoogleLogin, completeGoogleProfile as apiCompleteGoogleProfile } from '@/lib/api/googleAuth'
+import { googleLogin as apiGoogleLogin } from '@/lib/api/googleAuth'
 import { getErrorMessage } from '@/lib/utils'
 
 interface User {
@@ -114,7 +114,7 @@ export const changePassword = createAsyncThunk(
 // auth_service's /register never creates a profile itself.
 export const createProfile = createAsyncThunk(
   'auth/createProfile',
-  async (data: { first_name: string; last_name: string; mobile_no?: string }, { rejectWithValue }) => {
+  async (data: Parameters<typeof apiCreateProfile>[0], { rejectWithValue }) => {
     try {
       return await apiCreateProfile(data)
     } catch (error: any) {
@@ -145,26 +145,18 @@ export const updateProfilePhoto = createAsyncThunk(
   }
 )
 
+// auth_service's /google response carries no profile info (that's a
+// different microservice/database) — needs_profile_completion is resolved
+// here by probing user_service for a profile right after the tokens land.
 export const googleLoginThunk = createAsyncThunk(
   'auth/googleLogin',
-  async (idToken: string, { rejectWithValue }) => {
+  async (accessToken: string, { rejectWithValue }) => {
     try {
-      const response = await apiGoogleLogin(idToken)
+      const response = await apiGoogleLogin(accessToken)
       // Google Login currently defaults to session storage
       syncTokensToStorage(response, false)
-      return response
-    } catch (error: any) {
-      return rejectWithValue(getErrorMessage(error))
-    }
-  }
-)
-
-export const completeProfileThunk = createAsyncThunk(
-  'auth/completeGoogleProfile',
-  async (profileData: any, { rejectWithValue }) => {
-    try {
-      const response = await apiCompleteGoogleProfile(profileData)
-      return response
+      const currentUser = await getCurrentUser()
+      return { ...response, needs_profile_completion: currentUser.needs_profile_completion, user: currentUser }
     } catch (error: any) {
       return rejectWithValue(getErrorMessage(error))
     }
@@ -311,6 +303,7 @@ const authSlice = createSlice({
         state.refreshToken = action.payload.refresh_token
         state.isAuthenticated = true
         state.needsProfileCompletion = action.payload.needs_profile_completion
+        state.user = action.payload.user
       })
       .addCase(googleLoginThunk.rejected, (state, action) => {
         state.isLoading = false
@@ -323,8 +316,9 @@ const authSlice = createSlice({
       })
       .addCase(createProfile.fulfilled, (state, action) => {
         state.isLoading = false
+        state.needsProfileCompletion = false
         if (state.user) {
-          state.user = { ...state.user, profile: action.payload, full_name: action.payload.name }
+          state.user = { ...state.user, profile: action.payload, full_name: action.payload.name, needs_profile_completion: false }
         }
       })
       .addCase(createProfile.rejected, (state, action) => {
@@ -358,22 +352,6 @@ const authSlice = createSlice({
         }
       })
       .addCase(updateProfilePhoto.rejected, (state, action) => {
-        state.isLoading = false
-        state.error = action.payload as string
-      })
-      // completeProfileThunk cases
-      .addCase(completeProfileThunk.pending, (state) => {
-        state.isLoading = true
-        state.error = null
-      })
-      .addCase(completeProfileThunk.fulfilled, (state, action) => {
-        state.isLoading = false
-        state.needsProfileCompletion = false
-        if (state.user) {
-          state.user = { ...state.user, needs_profile_completion: false }
-        }
-      })
-      .addCase(completeProfileThunk.rejected, (state, action) => {
         state.isLoading = false
         state.error = action.payload as string
       })

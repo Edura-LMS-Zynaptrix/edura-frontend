@@ -36,7 +36,25 @@ export interface UserProfile {
   bio?: string | null
   avatar_url?: string | null
   avatar_public_id?: string | null
+  school?: string | null
+  district?: string | null
+  grade?: number | null
+  stream_id?: number | null
+  nic_number?: string | null
+  selected_subjects?: string[] | null
+  referral_code?: string | null
+  referred_by_user_id?: number | null
   created_at: string
+}
+
+export interface MeResponse {
+  id: number
+  email: string
+  role: string
+  is_active: boolean
+  is_email_verified: boolean
+  auth_provider: 'email' | 'google'
+  has_password: boolean
 }
 
 export interface CurrentUser {
@@ -47,6 +65,8 @@ export interface CurrentUser {
   needs_profile_completion: boolean
   full_name?: string
   profile: UserProfile | null
+  auth_provider?: string
+  has_password?: boolean
 }
 
 function getStoredAccessToken(): string | null {
@@ -82,8 +102,8 @@ export const register = async (data: RegisterData) => {
   return response.data
 }
 
-// No /me endpoint exists on auth_service — id/role come out of the access
-// token itself, and the extended profile (if any) from user_service.
+// id/role come out of the access token itself; auth_provider/has_password
+// from auth_service's real /me; the extended profile (if any) from user_service.
 export const getCurrentUser = async (): Promise<CurrentUser> => {
   const token = getStoredAccessToken()
   const decoded = token ? decodeAccessToken(token) : null
@@ -99,23 +119,58 @@ export const getCurrentUser = async (): Promise<CurrentUser> => {
     profile = null
   }
 
+  let me: MeResponse | null = null
+  try {
+    me = await getMe()
+  } catch {
+    me = null
+  }
+
   return {
     id: decoded.sub,
-    email: profile?.email || '',
+    email: profile?.email || me?.email || '',
     role: profile?.role || decoded.role,
-    is_active: true,
-    needs_profile_completion: false,
+    is_active: me?.is_active ?? true,
+    // A missing profile (404, tolerated above) means this account — email or
+    // Google — has never finished registration; the caller should route to
+    // the profile-completion step.
+    needs_profile_completion: profile === null,
     full_name: profile ? profile.name : undefined,
+    auth_provider: me?.auth_provider,
+    has_password: me?.has_password,
     profile,
   }
 }
 
+// Real /me on auth_service — surfaces auth_provider/has_password so a
+// profile page can offer "Set password" for Google-only accounts.
+export const getMe = async (): Promise<MeResponse> => {
+  const response = await apiClient.get('/api/auth/me')
+  return response.data
+}
+
 // Creates the profile for the currently authenticated user. auth_service's
 // /register only creates the login record — this is the required follow-up
-// call so the account has a name before it's used anywhere else.
+// call so the account has a name before it's used anywhere else. Also used
+// as the one-time profile-completion step for new Google sign-ups.
 export const createProfile = async (
   data: Pick<UserProfile, 'first_name' | 'last_name'> &
-    Partial<Pick<UserProfile, 'mobile_no' | 'date_of_birth' | 'bio' | 'avatar_url' | 'avatar_public_id'>>
+    Partial<
+      Pick<
+        UserProfile,
+        | 'mobile_no'
+        | 'date_of_birth'
+        | 'bio'
+        | 'avatar_url'
+        | 'avatar_public_id'
+        | 'school'
+        | 'district'
+        | 'grade'
+        | 'stream_id'
+        | 'nic_number'
+        | 'selected_subjects'
+      >
+    > & { referral_code?: string | null }
 ): Promise<UserProfile> => {
   const response = await apiClient.post('/api/users/', data)
   return response.data
@@ -123,7 +178,22 @@ export const createProfile = async (
 
 export const updateProfile = async (
   data: Partial<
-    Pick<UserProfile, 'first_name' | 'last_name' | 'mobile_no' | 'date_of_birth' | 'bio' | 'avatar_url' | 'avatar_public_id'>
+    Pick<
+      UserProfile,
+      | 'first_name'
+      | 'last_name'
+      | 'mobile_no'
+      | 'date_of_birth'
+      | 'bio'
+      | 'avatar_url'
+      | 'avatar_public_id'
+      | 'school'
+      | 'district'
+      | 'grade'
+      | 'stream_id'
+      | 'nic_number'
+      | 'selected_subjects'
+    >
   >
 ) => {
   const token = getStoredAccessToken()
@@ -149,8 +219,9 @@ export const updateProfilePhoto = async (data: FormData): Promise<UserProfile> =
 
 // ── Password management ──────────────────────────────────────────────────
 // auth_service exposes OTP request/verify keyed by user_id (not email), and
-// has no endpoint to actually set a new password after OTP verification —
-// so the forgot/reset-password flow cannot be completed end-to-end today.
+// has no endpoint to turn a verified OTP into a new password — so the
+// email-link forgot/reset-password flow still cannot be completed end-to-end.
+// set-password / change-password (both authenticated, JWT-scoped) are real.
 
 export const forgotPassword = async (_data: { email: string }): Promise<never> => {
   throw new Error('Password reset is not supported by the Edura backend yet.')
@@ -164,16 +235,20 @@ export const resetPassword = async (_data: {
   throw new Error('Password reset is not supported by the Edura backend yet.')
 }
 
-export const setPassword = async (_data: {
+// For a Google-only account (no password yet) — after this, the same email
+// works with both Google Sign-In and email+password.
+export const setPassword = async (data: {
   new_password: string
   confirm_password: string
-}): Promise<never> => {
-  throw new Error('Password reset is not supported by the Edura backend yet.')
+}): Promise<{ message: string }> => {
+  const response = await apiClient.post('/api/auth/set-password', { new_password: data.new_password })
+  return response.data
 }
 
-export const changePassword = async (_data: {
+export const changePassword = async (data: {
   current_password: string
   new_password: string
-}): Promise<never> => {
-  throw new Error('Password change is not supported by the Edura backend yet.')
+}): Promise<{ message: string }> => {
+  const response = await apiClient.post('/api/auth/change-password', data)
+  return response.data
 }
