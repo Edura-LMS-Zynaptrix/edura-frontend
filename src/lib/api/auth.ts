@@ -35,6 +35,7 @@ export interface UserProfile {
   date_of_birth?: string | null
   bio?: string | null
   avatar_url?: string | null
+  avatar_public_id?: string | null
   created_at: string
 }
 
@@ -114,14 +115,16 @@ export const getCurrentUser = async (): Promise<CurrentUser> => {
 // call so the account has a name before it's used anywhere else.
 export const createProfile = async (
   data: Pick<UserProfile, 'first_name' | 'last_name'> &
-    Partial<Pick<UserProfile, 'mobile_no' | 'date_of_birth' | 'bio' | 'avatar_url'>>
+    Partial<Pick<UserProfile, 'mobile_no' | 'date_of_birth' | 'bio' | 'avatar_url' | 'avatar_public_id'>>
 ): Promise<UserProfile> => {
   const response = await apiClient.post('/api/users/', data)
   return response.data
 }
 
 export const updateProfile = async (
-  data: Partial<Pick<UserProfile, 'first_name' | 'last_name' | 'mobile_no' | 'date_of_birth' | 'bio' | 'avatar_url'>>
+  data: Partial<
+    Pick<UserProfile, 'first_name' | 'last_name' | 'mobile_no' | 'date_of_birth' | 'bio' | 'avatar_url' | 'avatar_public_id'>
+  >
 ) => {
   const token = getStoredAccessToken()
   const decoded = token ? decodeAccessToken(token) : null
@@ -132,12 +135,16 @@ export const updateProfile = async (
 }
 
 // Uploads the photo to Cloudinary via content_service's self-service /avatar
-// endpoint, then persists the returned URL onto the user's profile.
+// endpoint, then persists both the URL and the public_id (needed to later
+// manage/delete the asset in Cloudinary — a URL alone isn't enough for that).
 export const updateProfilePhoto = async (data: FormData): Promise<UserProfile> => {
   const uploadResponse = await apiClient.post('/api/content/avatar', data, {
     headers: { 'Content-Type': 'multipart/form-data' },
   })
-  return updateProfile({ avatar_url: uploadResponse.data.secure_url })
+  return updateProfile({
+    avatar_url: uploadResponse.data.secure_url,
+    avatar_public_id: uploadResponse.data.public_id,
+  })
 }
 
 // ── Password management ──────────────────────────────────────────────────

@@ -124,18 +124,10 @@ export default function ModuleContentPage() {
       const moduleData = modulesData.find((m: any) => String(m.id) === String(moduleId)) ?? null
       setModule(moduleData)
 
-      // For each video, fetch its materials
-      const videosWithMaterials = await Promise.all(
-        videosData.map(async (video: any) => {
-          try {
-            const materials = await adminApi.getMaterialsForVideo(video.id)
-            return { ...video, materials: materials || [] }
-          } catch {
-            return { ...video, materials: [] }
-          }
-        })
-      )
-      setVideos(videosWithMaterials)
+      // A lesson has a single cloudinary_asset_url in Edura (not a separate
+      // materials list) — getVideosForModule already derives a one-item
+      // materials array from it for display.
+      setVideos(videosData)
       setLocalError('')
     } catch (err: any) {
       setLocalError(getErrorMessage(err) || 'Failed to load content')
@@ -252,36 +244,25 @@ export default function ModuleContentPage() {
 
       let fileUrl = materialForm.file_url
       let filePublicId = materialForm.file_public_id
-      let fileType = materialForm.file_type
 
+      // Edura's Lesson has a single cloudinary_asset_url, not a separate
+      // materials list — uploading here replaces the lesson's one attachment.
       if (materialFile) {
         const uploadRes = await adminApi.uploadFile(materialFile)
         fileUrl = uploadRes.file_url
         filePublicId = uploadRes.file_public_id
-        fileType = uploadRes.file_type
       }
 
-      if (!fileUrl && !materialFile) {
+      if (!fileUrl) {
         setLocalError('Please select a file')
         setIsProcessing(false)
         return
       }
 
-      const data = {
-        module_id: moduleId,
-        video_id: materialTargetVideoId,
-        title: materialForm.title,
-        file_url: fileUrl,
-        file_type: fileType,
-        file_public_id: filePublicId,
-        order_number: Number(materialForm.order_number) || 0
-      }
-
-      if (editingMaterial) {
-        await adminApi.updateMaterial(editingMaterial.id, data)
-      } else {
-        await adminApi.createMaterial(data)
-      }
+      await adminApi.updateVideoForModule(courseId, moduleId, materialTargetVideoId, {
+        cloudinary_asset_url: fileUrl,
+        cloudinary_public_id: filePublicId || null,
+      })
 
       setShowMaterialModal(false)
       loadData()
@@ -292,13 +273,13 @@ export default function ModuleContentPage() {
     }
   }
 
-  const handleDeleteMaterial = async (material: any) => {
-    if (!window.confirm(`Delete material "${material.title}"?`)) return
+  const handleDeleteMaterial = async (videoId: string) => {
+    if (!window.confirm('Delete this attachment?')) return
     try {
-      if (material.file_public_id) {
-        await adminApi.deleteImage(material.file_public_id)
-      }
-      await adminApi.deleteMaterial(material.id)
+      await adminApi.updateVideoForModule(courseId, moduleId, videoId, {
+        cloudinary_asset_url: null,
+        cloudinary_public_id: null,
+      })
       loadData()
     } catch (err: any) {
       alert(getErrorMessage(err) || 'Delete failed')
@@ -559,7 +540,7 @@ export default function ModuleContentPage() {
                           <button onClick={() => openMaterialModal(video.id, mat)} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg">
                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                           </button>
-                          <button onClick={() => handleDeleteMaterial(mat)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg">
+                          <button onClick={() => handleDeleteMaterial(video.id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg">
                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                           </button>
                         </div>

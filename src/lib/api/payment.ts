@@ -222,6 +222,7 @@ export async function uploadBankSlip(data: BankSlipUploadRequest): Promise<BankS
     payment_id: String(result.payment_id),
     user_id: '',
     slip_image_url: result.receipt_url,
+    slip_image_public_id: result.receipt_public_id,
     bank_name: data.bank_name,
     depositor_name: data.depositor_name,
     deposit_date: data.deposit_date,

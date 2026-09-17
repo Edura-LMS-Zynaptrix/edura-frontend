@@ -29,6 +29,7 @@ export default function AdminCoursesPage() {
     description: '',
     price: '0',
     image_url: '',
+    image_public_id: '',
   })
 
   const error = storeError || localError
@@ -56,7 +57,7 @@ export default function AdminCoursesPage() {
     }
   }, [isAuthenticated, isInitialized, user, dispatch, router, pathname, isLoading, searchParams])
 
-  const resetForm = () => setCourseForm({ title: '', description: '', price: '0', image_url: '' })
+  const resetForm = () => setCourseForm({ title: '', description: '', price: '0', image_url: '', image_public_id: '' })
 
   const validateCourseForm = (): { title: string; price: number; description: string | null } | null => {
     const title = courseForm.title.trim()
@@ -67,11 +68,13 @@ export default function AdminCoursesPage() {
     return { title, price, description }
   }
 
-  const uploadThumbnail = async (): Promise<string | null> => {
-    if (!courseImageFile) return courseForm.image_url || null
+  // public_id is stored alongside the URL so the asset can be managed
+  // (deleted, transformed) in Cloudinary later — the URL alone isn't enough.
+  const uploadThumbnail = async (): Promise<{ url: string | null; publicId: string | null }> => {
+    if (!courseImageFile) return { url: courseForm.image_url || null, publicId: courseForm.image_public_id || null }
     const resultAction = await dispatch(uploadImageThunk({ file: courseImageFile, entity: 'courses' }))
     if (uploadImageThunk.fulfilled.match(resultAction)) {
-      return resultAction.payload.image_url
+      return { url: resultAction.payload.image_url, publicId: resultAction.payload.image_public_id }
     }
     throw new Error((resultAction.payload as string) || 'Image upload failed')
   }
@@ -96,6 +99,7 @@ export default function AdminCoursesPage() {
       description: course.description || '',
       price: String(course.price),
       image_url: course.image_url || '',
+      image_public_id: course.image_public_id || '',
     })
     setCourseImageFile(null)
     setEditingCourseId(course.id)
@@ -118,8 +122,11 @@ export default function AdminCoursesPage() {
       if (!validated) { setIsSaving(false); return }
 
       let imageUrl: string | null = null
+      let imagePublicId: string | null = null
       try {
-        imageUrl = await uploadThumbnail()
+        const uploaded = await uploadThumbnail()
+        imageUrl = uploaded.url
+        imagePublicId = uploaded.publicId
       } catch (err: any) {
         setLocalError(getErrorMessage(err))
         setIsSaving(false)
@@ -134,6 +141,7 @@ export default function AdminCoursesPage() {
         price: validated.price,
         description: validated.description,
         image_url: imageUrl,
+        image_public_id: imagePublicId,
       })).unwrap()
 
       resetForm()
@@ -156,9 +164,12 @@ export default function AdminCoursesPage() {
       if (!validated) { setIsSaving(false); return }
 
       let imageUrl: string | null = courseForm.image_url || null
+      let imagePublicId: string | null = courseForm.image_public_id || null
       if (courseImageFile) {
         try {
-          imageUrl = await uploadThumbnail()
+          const uploaded = await uploadThumbnail()
+          imageUrl = uploaded.url
+          imagePublicId = uploaded.publicId
         } catch (err: any) {
           setLocalError(getErrorMessage(err))
           setIsSaving(false)
@@ -173,6 +184,7 @@ export default function AdminCoursesPage() {
           price: validated.price,
           description: validated.description,
           image_url: imageUrl,
+          image_public_id: imagePublicId,
         },
       })).unwrap()
 

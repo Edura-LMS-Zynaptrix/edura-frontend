@@ -146,6 +146,8 @@ export interface VideoUpdateData {
   duration_seconds?: number
   order_number?: number
   is_published?: boolean
+  cloudinary_asset_url?: string | null
+  cloudinary_public_id?: string | null
 }
 
 export interface MaterialCreateData {
@@ -550,6 +552,7 @@ function mapAdminCourse(c: any): any {
     grade: 0,
     course_type: 'video',
     image_url: c.thumbnail_url ?? null,
+    image_public_id: c.thumbnail_public_id ?? null,
     price: Number(c.price ?? 0),
     description: c.description ?? null,
     is_active: c.status === 'PUBLISHED',
@@ -578,6 +581,7 @@ export const createCourse = async (data: {
     description: data.description,
     price: data.price,
     thumbnail_url: data.image_url,
+    thumbnail_public_id: data.image_public_id,
   })
   return mapAdminCourse(response.data)
 }
@@ -598,6 +602,7 @@ export const updateCourse = async (id: string, data: {
     description: data.description,
     price: data.price,
     thumbnail_url: data.image_url,
+    thumbnail_public_id: data.image_public_id,
   })
   return mapAdminCourse(response.data)
 }
@@ -852,9 +857,36 @@ export const getVideos = async (_moduleId: string): Promise<any> => {
   throw new Error('Use getVideosForModule(courseId, moduleId) — Edura scopes lessons under a course.')
 }
 
+// course_service's LessonResponse uses its own field names (youtube_video_id,
+// order) — translate to the yt_video_id/order_number shape the admin pages
+// (and student.ts's VideoLesson) expect.
+function mapAdminLesson(l: any): any {
+  return {
+    id: String(l.id),
+    module_id: String(l.module_id),
+    title: l.title,
+    description: null,
+    yt_video_id: l.youtube_video_id ?? '',
+    cloudinary_asset_url: l.cloudinary_asset_url ?? null,
+    duration_seconds: l.duration_seconds ?? 0,
+    order_number: l.order ?? 0,
+    is_published: true, // course_service has no per-lesson publish flag
+    materials: l.cloudinary_asset_url
+      ? [{
+          id: `${l.id}-attachment`,
+          title: 'Attachment',
+          file_url: l.cloudinary_asset_url,
+          file_public_id: l.cloudinary_public_id ?? null,
+          file_type: '',
+          order_number: 0,
+        }]
+      : [],
+  }
+}
+
 export const getVideosForModule = async (courseId: string, moduleId: string) => {
   const response = await apiClient.get(`/api/courses/${courseId}/modules/${moduleId}/lessons`)
-  return response.data
+  return response.data.map(mapAdminLesson)
 }
 
 export const createVideo = async (_data: VideoCreateData): Promise<any> => {
@@ -868,7 +900,7 @@ export const createVideoForModule = async (courseId: string, data: VideoCreateDa
     duration_seconds: data.duration_seconds,
     order: data.order_number,
   })
-  return response.data
+  return mapAdminLesson(response.data)
 }
 
 export const updateVideo = async (_id: string, _data: VideoUpdateData): Promise<any> => {
@@ -886,8 +918,10 @@ export const updateVideoForModule = async (
     youtube_video_id: data.yt_video_id,
     duration_seconds: data.duration_seconds,
     order: data.order_number,
+    cloudinary_asset_url: data.cloudinary_asset_url,
+    cloudinary_public_id: data.cloudinary_public_id,
   })
-  return response.data
+  return mapAdminLesson(response.data)
 }
 
 export const deleteVideo = async (_id: string): Promise<any> => {
