@@ -246,19 +246,47 @@ export async function getPaymentDetails(paymentId: string): Promise<PaymentRespo
   return found
 }
 
-// Admin Payment APIs
+// Admin Payment APIs (real: payment_service /receipts)
 
-export async function getPendingBankSlips(_courseId?: string): Promise<BankSlipResponse[]> {
-  // payment_service records receipts but exposes no GET/verify endpoint for them.
-  return []
+function mapReceipt(r: any): BankSlipResponse {
+  return {
+    id: String(r.id),
+    payment_id: String(r.payment_id),
+    user_id: String(r.student_id),
+    slip_image_url: r.receipt_url,
+    slip_image_public_id: r.receipt_public_id ?? undefined,
+    // payment_service's ReceiptStatus enum stores "approved"; the admin UI
+    // (built around the verb the admin performs) expects "verified".
+    status: r.status === 'approved' ? 'verified' : r.status,
+    verified_by: r.reviewer_id != null ? String(r.reviewer_id) : undefined,
+    verified_at: r.reviewed_at ?? undefined,
+    rejection_reason: r.reviewer_note ?? undefined,
+    created_at: r.created_at,
+    amount: Number(r.amount),
+    payment_type: 'course',
+    item_name: `Course #${r.course_id}`,
+  }
 }
 
-export async function getAllBankSlips(_statusFilter?: string, _courseId?: string): Promise<BankSlipResponse[]> {
-  return []
+export async function getPendingBankSlips(courseId?: string): Promise<BankSlipResponse[]> {
+  const response = await api.get('/api/payments/receipts', { params: { status_filter: 'pending' } })
+  const receipts = response.data.map(mapReceipt)
+  return courseId ? receipts.filter((r: any) => r.item_name === `Course #${courseId}`) : receipts
 }
 
-export async function getBankSlipDetails(_slipId: string): Promise<BankSlipResponse> {
-  throw new Error('Bank-slip review is not exposed by the Edura backend yet.')
+export async function getAllBankSlips(statusFilter?: string, courseId?: string): Promise<BankSlipResponse[]> {
+  const response = await api.get('/api/payments/receipts', {
+    params: statusFilter ? { status_filter: statusFilter } : undefined,
+  })
+  const receipts = response.data.map(mapReceipt)
+  return courseId ? receipts.filter((r: any) => r.item_name === `Course #${courseId}`) : receipts
+}
+
+export async function getBankSlipDetails(slipId: string): Promise<BankSlipResponse> {
+  const all = await getAllBankSlips()
+  const found = all.find((r) => r.id === slipId)
+  if (!found) throw new Error('Receipt not found')
+  return found
 }
 
 export interface BankSlipVerification {
@@ -266,8 +294,9 @@ export interface BankSlipVerification {
   rejection_reason?: string
 }
 
-export async function verifyBankSlip(_slipId: string, _verification: BankSlipVerification): Promise<BankSlipResponse> {
-  throw new Error('Bank-slip review is not exposed by the Edura backend yet.')
+export async function verifyBankSlip(slipId: string, verification: BankSlipVerification): Promise<BankSlipResponse> {
+  const response = await api.put(`/api/payments/receipts/${slipId}/verify`, verification)
+  return mapReceipt(response.data)
 }
 
 export interface PaymentStats {
@@ -285,8 +314,9 @@ export interface PaymentStats {
 // Derived client-side from the real payments list — payment_service has no
 // dedicated stats endpoint.
 export async function getPaymentStats(courseId?: string): Promise<PaymentStats> {
-  const all = await getAllPayments()
+  const [all, receipts] = await Promise.all([getAllPayments(), getAllBankSlips()])
   const filtered = courseId ? all.filter((p) => p.course_id === courseId) : all
+  const filteredReceipts = courseId ? receipts.filter((r) => r.item_name === `Course #${courseId}`) : receipts
   return {
     total_payments: filtered.length,
     completed_payments: filtered.filter((p) => p.status === 'success').length,
@@ -294,7 +324,11 @@ export async function getPaymentStats(courseId?: string): Promise<PaymentStats> 
     total_revenue: filtered
       .filter((p) => p.status === 'success')
       .reduce((sum, p) => sum + p.amount, 0),
-    bank_slips: { pending: 0, verified: 0, rejected: 0 },
+    bank_slips: {
+      pending: filteredReceipts.filter((r) => r.status === 'pending').length,
+      verified: filteredReceipts.filter((r) => r.status === 'verified' || r.status === 'approved').length,
+      rejected: filteredReceipts.filter((r) => r.status === 'rejected').length,
+    },
   }
 }
 

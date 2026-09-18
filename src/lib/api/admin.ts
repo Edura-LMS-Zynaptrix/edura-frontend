@@ -167,12 +167,16 @@ export interface MaterialUpdateData {
   order_number?: number
 }
 
-// ── Stats (derived client-side — admin_service/analytics_service are stubs) ─
+// ── Stats (derived client-side from real per-service endpoints — there's no
+// single cross-service aggregate endpoint, so this composes user_service's
+// /stats, course_service's list count, and payment_service's receipts/payments) ─
 
 export const getAdminStats = async (): Promise<AdminStats> => {
-  const [coursesRes, paymentsRes] = await Promise.all([
+  const [coursesRes, paymentsRes, receiptsRes, userStatsRes] = await Promise.all([
     apiClient.get('/api/courses/'),
     paymentApi.getAllPayments().catch(() => []),
+    paymentApi.getPendingBankSlips().catch(() => []),
+    apiClient.get('/api/users/stats').catch(() => ({ data: { total_students: 0 } })),
   ])
   const successPayments = paymentsRes.filter((p) => p.status === 'success')
   const now = new Date()
@@ -184,13 +188,13 @@ export const getAdminStats = async (): Promise<AdminStats> => {
     .reduce((sum, p) => sum + p.amount, 0)
 
   return {
-    total_students: 0, // user_service's list endpoint doesn't filter by role
+    total_students: userStatsRes.data?.total_students ?? 0,
     total_courses: coursesRes.data?.total ?? 0,
     total_exams: 0, // no endpoint enumerates assessments across courses
     total_exam_attempts: 0,
     total_revenue: successPayments.reduce((sum, p) => sum + p.amount, 0),
     revenue_this_month: revenueThisMonth,
-    pending_bank_slips: 0,
+    pending_bank_slips: receiptsRes.length,
     recent_activity: [],
   }
 }
@@ -229,20 +233,20 @@ function mapProfileToAdminStudent(p: any): AdminStudent {
   return {
     user_id: String(p.id),
     email: p.email ?? '',
-    is_active: true,
+    is_active: p.is_active ?? true,
     needs_profile_completion: false,
     joined_at: p.created_at,
     full_name: p.name,
     phone_number: p.mobile_no ?? '',
     parent_phone_number: null,
-    school: '',
-    district: '',
-    grade: 0,
-    nic_number: null,
+    school: p.school ?? '',
+    district: p.district ?? '',
+    grade: p.grade ?? 0,
+    nic_number: p.nic_number ?? null,
     profile_photo_url: p.avatar_url ?? null,
     enrollment_count: 0,
     attempt_count: 0,
-    referral_code: null,
+    referral_code: p.referral_code ?? null,
     referred_by_code: null,
     wallet_credits: 0,
     successful_referrals: 0,
@@ -260,27 +264,37 @@ export const getAdminStudents = async (params?: {
 }): Promise<AdminStudentsResponse> => {
   const page = params?.skip ? Math.floor(params.skip / (params.limit ?? 20)) + 1 : 1
   const response = await apiClient.get('/api/users/', {
-    params: { page, page_size: params?.limit ?? 20 },
+    params: { page, page_size: params?.limit ?? 20, role: 'student', search: params?.search },
   })
-  let students = response.data.items.map(mapProfileToAdminStudent)
-  if (params?.search) {
-    const q = params.search.toLowerCase()
-    students = students.filter(
-      (s: AdminStudent) => s.full_name.toLowerCase().includes(q) || s.email.toLowerCase().includes(q)
-    )
+  let students: AdminStudent[] = response.data.items.map(mapProfileToAdminStudent)
+  if (params?.district) {
+    const q = params.district.toLowerCase()
+    students = students.filter((s) => s.district.toLowerCase().includes(q))
+  }
+  if (params?.grade) {
+    students = students.filter((s) => s.grade === params.grade)
+  }
+  if (params?.is_active !== undefined) {
+    students = students.filter((s) => s.is_active === params.is_active)
   }
   return { total: response.data.total, students }
 }
 
-// user_service has no is_active toggle on a profile (that flag lives on
-// auth_service's User row, with no endpoint to change it either).
-export const toggleStudentActive = async (_userId: string): Promise<{ user_id: string; is_active: boolean }> => {
-  throw new Error('Activating/deactivating users is not supported by the Edura backend yet.')
+export const toggleStudentActive = async (userId: string): Promise<{ user_id: string; is_active: boolean }> => {
+  // Caller doesn't know the current state up front, so flip it: read, then write the opposite.
+  const current = await apiClient.get(`/api/users/${userId}`)
+  const nextActive = !(current.data.is_active ?? true)
+  const response = await apiClient.put(`/api/auth/users/${userId}/status`, { is_active: nextActive })
+  return response.data
 }
 
+// Deletes the account everywhere — the profile (user_service) and the login
+// record (auth_service). Deleting only the profile would leave a login-only
+// account behind that could still authenticate but shows up nowhere.
 export const deleteStudent = async (userId: string): Promise<{ message: string }> => {
   await apiClient.delete(`/api/users/${userId}`)
-  return { message: 'User profile deleted' }
+  await apiClient.delete(`/api/auth/users/${userId}`).catch(() => {})
+  return { message: 'Student deleted' }
 }
 
 // Student Progress Analytics
@@ -392,10 +406,28 @@ export interface CourseStruggleResponse {
 }
 
 export const getAdminAnalytics = async (): Promise<AnalyticsData> => {
+  // Grade/district distribution is real, computed from user_service's
+  // enriched student listing. Revenue/attempts/exam/subject breakdowns would
+  // need new aggregation endpoints in course_service/assessment_service/
+  // progress_service that don't exist yet — left empty rather than faked.
+  const response = await apiClient.get('/api/users/', { params: { role: 'student', page_size: 100 } })
+  const students = response.data.items as any[]
+
+  const gradeCounts = new Map<number, number>()
+  const districtCounts = new Map<string, number>()
+  for (const s of students) {
+    if (s.grade) gradeCounts.set(s.grade, (gradeCounts.get(s.grade) ?? 0) + 1)
+    if (s.district) districtCounts.set(s.district, (districtCounts.get(s.district) ?? 0) + 1)
+  }
+
   return {
     revenue_by_month: [],
-    students_by_grade: [],
-    students_by_district: [],
+    students_by_grade: Array.from(gradeCounts.entries())
+      .sort((a, b) => a[0] - b[0])
+      .map(([grade, count]) => ({ grade, count })),
+    students_by_district: Array.from(districtCounts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([district, count]) => ({ district, count })),
     attempts_by_month: [],
     top_exams: [],
     enrollments_by_subject: [],
@@ -581,14 +613,15 @@ function mapAdminCourse(c: any): any {
     id: String(c.id),
     title: c.title,
     subject: '',
-    grade: 0,
+    grade: c.grade ?? 0,
     course_type: 'video',
     image_url: c.thumbnail_url ?? null,
     image_public_id: c.thumbnail_public_id ?? null,
     price: Number(c.price ?? 0),
     description: c.description ?? null,
     is_active: c.status === 'PUBLISHED',
-    stream_ids: [],
+    status: c.status,
+    stream_ids: (c.stream_ids ?? []).map(String),
   }
 }
 
@@ -612,6 +645,8 @@ export const createCourse = async (data: {
     title: data.title,
     description: data.description,
     price: data.price,
+    grade: data.grade || undefined,
+    stream_ids: data.stream_ids?.length ? data.stream_ids.map(Number) : undefined,
     thumbnail_url: data.image_url,
     thumbnail_public_id: data.image_public_id,
   })
@@ -624,6 +659,7 @@ export const updateCourse = async (id: string, data: {
   grade?: number
   course_type?: 'exam' | 'video'
   price?: number
+  status?: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED'
   description?: string | null
   image_url?: string | null
   image_public_id?: string | null
@@ -633,6 +669,9 @@ export const updateCourse = async (id: string, data: {
     title: data.title,
     description: data.description,
     price: data.price,
+    grade: data.grade || undefined,
+    stream_ids: data.stream_ids ? data.stream_ids.map(Number) : undefined,
+    status: data.status,
     thumbnail_url: data.image_url,
     thumbnail_public_id: data.image_public_id,
   })
@@ -1094,7 +1133,9 @@ export const revokeVideoModuleAccess = async (_moduleId: string, _userId: string
   throw new Error('Manually revoking module access is not supported by the Edura backend.')
 }
 
-// ── Super Admin Management (best-effort real: user_service + auth_service) ──
+// ── Admin Management (real: auth_service + user_service) ────────────────────
+// Edura's role model has no separate super_admin tier — every admin account
+// is equally privileged, and any admin can manage any other admin account.
 
 export interface AdminResponse {
   id: string
@@ -1113,28 +1154,31 @@ export interface AdminCreateData {
 }
 
 export const getSubAdmins = async (): Promise<{ total: number; admins: AdminResponse[] }> => {
-  const response = await apiClient.get('/api/users/', { params: { page: 1, page_size: 100 } })
-  const admins: AdminResponse[] = response.data.items
-    .filter((p: any) => p.role === 'admin')
-    .map((p: any) => ({
-      id: String(p.id),
-      user_id: String(p.id),
-      email: p.email ?? '',
-      full_name: p.name,
-      role: p.role,
-      is_active: true,
-      created_at: p.created_at,
-    }))
-  return { total: admins.length, admins }
+  const response = await apiClient.get('/api/users/', { params: { page: 1, page_size: 100, role: 'admin' } })
+  const admins: AdminResponse[] = response.data.items.map((p: any) => ({
+    id: String(p.id),
+    user_id: String(p.id),
+    email: p.email ?? '',
+    full_name: p.name,
+    role: p.role,
+    is_active: p.is_active ?? true,
+    created_at: p.created_at,
+  }))
+  return { total: response.data.total, admins }
 }
 
 export const createSubAdmin = async (data: AdminCreateData): Promise<AdminResponse> => {
-  // Creates the login (auth_service); user_service has no endpoint to create
-  // the matching profile, so the account exists but has no name/profile yet.
-  const response = await apiClient.post('/api/auth/register', {
+  const [first_name, ...rest] = data.full_name.trim().split(' ')
+  const last_name = rest.join(' ') || first_name
+  // Creates the login (auth_service) AND the matching profile (user_service)
+  // in one call — this account will never log in through the normal
+  // register->login->createProfile flow to create its own profile, since
+  // someone else (this admin) is creating it on its behalf.
+  const response = await apiClient.post('/api/auth/admin/create-admin', {
     email: data.email,
     password: data.password,
-    role: 'admin',
+    first_name,
+    last_name,
   })
   return {
     id: String(response.data.id),
@@ -1147,8 +1191,11 @@ export const createSubAdmin = async (data: AdminCreateData): Promise<AdminRespon
   }
 }
 
+// Deletes the account everywhere — the profile (user_service) and the login
+// record (auth_service), same as deleteStudent above.
 export const deleteSubAdmin = async (adminId: string): Promise<void> => {
   await apiClient.delete(`/api/users/${adminId}`)
+  await apiClient.delete(`/api/auth/users/${adminId}`).catch(() => {})
 }
 
 // ── Video Module Management (aliases onto the real functions above) ─────────

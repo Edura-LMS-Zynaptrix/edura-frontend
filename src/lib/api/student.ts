@@ -331,18 +331,26 @@ function mapCourse(c: any): Course {
     id: String(c.id),
     title: c.title,
     subject: '',
-    grade: 0,
+    grade: c.grade ?? 0,
     image_url: c.thumbnail_url ?? null,
     description: c.description ?? null,
     price: Number(c.price ?? 0),
     is_active: c.status === 'PUBLISHED',
     course_type: 'video',
+    stream_ids: (c.stream_ids ?? []).map(String),
     modules: [],
   }
 }
 
-export const getAvailableCourses = async (): Promise<Course[]> => {
-  const response = await apiClient.get('/api/courses/')
+// `grade` is the viewer's own grade — course_service applies the same O/L
+// (10<->11) and A/L (12<->13) unlock bands the reference platform uses.
+// `stream_id` additionally scopes grade 12/13 courses to the viewer's own
+// A/L stream (a course can belong to more than one stream). Both omitted
+// for anonymous/ungraded browsing, which shows every published course.
+export const getAvailableCourses = async (grade?: number | null, streamId?: number | string | null): Promise<Course[]> => {
+  const response = await apiClient.get('/api/courses/', {
+    params: { grade: grade ?? undefined, stream_id: streamId ?? undefined },
+  })
   const items = response.data?.items ?? []
   return items.map(mapCourse)
 }

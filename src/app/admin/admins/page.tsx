@@ -38,13 +38,13 @@ export default function AdminsPage() {
       router.push(`/login?callbackUrl=${encodeURIComponent(fullPath)}`)
     } else if (isAuthenticated && !user && !authLoading) {
       dispatch(fetchCurrentUser())
-    } else if (isAuthenticated && user && user.role !== 'super_admin') {
+    } else if (isAuthenticated && user && user.role !== 'admin') {
       router.push('/admin/dashboard')
     }
   }, [isInitialized, isAuthenticated, user, router, dispatch, pathname, authLoading, searchParams])
 
   useEffect(() => {
-    if (user?.role === 'super_admin') {
+    if (user?.role === 'admin') {
       dispatch(fetchSubAdmins())
     }
   }, [user, dispatch])
@@ -85,7 +85,7 @@ export default function AdminsPage() {
     }
   }
 
-  if (authLoading || !user || user.role !== 'super_admin') {
+  if (authLoading || !user || user.role !== 'admin') {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="w-16 h-16 border-4 border-teal-600/30 border-t-teal-600 rounded-full animate-spin" />
@@ -102,7 +102,7 @@ export default function AdminsPage() {
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Manage Administrators</h1>
             <p className="text-sm text-gray-500 mt-1">
-              Add or remove sub-admins to help manage the platform.
+              Add or remove administrator accounts.
             </p>
           </div>
           <button
@@ -155,7 +155,7 @@ export default function AdminsPage() {
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                         </svg>
                       </div>
-                      <p className="font-medium">No sub-admins yet</p>
+                      <p className="font-medium">No other admins yet</p>
                       <p className="text-xs mt-1">Start by adding your first administrative partner.</p>
                     </td>
                   </tr>
@@ -175,7 +175,7 @@ export default function AdminsPage() {
                       </td>
                       <td className="px-6 py-4">
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                          {admin.role === 'super_admin' ? 'Master Admin' : 'Sub Admin'}
+                          Administrator
                         </span>
                       </td>
                       <td className="px-6 py-4 text-gray-500">
@@ -227,9 +227,7 @@ export default function AdminsPage() {
             <div>
               <h4 className="font-bold text-teal-900">Admin Permissions</h4>
               <p className="text-sm text-teal-800 mt-1 leading-relaxed">
-                Sub-admins have full access to manage courses, students, exams, and payments. However, they 
-                <span className="font-bold italic"> cannot </span> 
-                add other admins or delete existing ones. Only Master Admins have permission to manage administrative accounts.
+                Every administrator account has full, equal access to manage courses, students, exams, payments, and other admin accounts — there is no separate tier of "master" vs "sub" admins. Add accounts here only for people you trust with full platform access.
               </p>
             </div>
           </div>
@@ -243,7 +241,7 @@ export default function AdminsPage() {
           
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
-              <h3 className="font-bold text-gray-900">Add New Sub Admin</h3>
+              <h3 className="font-bold text-gray-900">Add New Admin</h3>
               <button 
                 onClick={() => setShowCreateModal(false)}
                 disabled={isSubmitting}

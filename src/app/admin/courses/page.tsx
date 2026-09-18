@@ -6,6 +6,7 @@ import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
 import { fetchCurrentUser } from '@/lib/redux/slices/authSlice'
 import { fetchCourses, createCourse, updateCourse, deleteCourse, AdminCourse, uploadImageThunk } from '@/lib/redux/slices/coursesSlice'
+import { fetchStreams } from '@/lib/redux/slices/adminSlice'
 import { getErrorMessage } from '@/lib/utils'
 
 export default function AdminCoursesPage() {
@@ -15,6 +16,7 @@ export default function AdminCoursesPage() {
   const dispatch = useAppDispatch()
   const { user, isAuthenticated, isInitialized, isLoading } = useAppSelector((state) => state.auth)
   const { courses, isLoading: loadingData, error: storeError } = useAppSelector((state) => state.courses)
+  const { streams } = useAppSelector((state) => state.admin)
 
   const [localError, setLocalError] = useState('')
   const [courseImageFile, setCourseImageFile] = useState<File | null>(null)
@@ -28,6 +30,8 @@ export default function AdminCoursesPage() {
     title: '',
     description: '',
     price: '0',
+    grade: '',
+    stream_ids: [] as string[],
     image_url: '',
     image_public_id: '',
   })
@@ -54,10 +58,20 @@ export default function AdminCoursesPage() {
     }
     if (isAuthenticated && user) {
       dispatch(fetchCourses())
+      dispatch(fetchStreams())
     }
   }, [isAuthenticated, isInitialized, user, dispatch, router, pathname, isLoading, searchParams])
 
-  const resetForm = () => setCourseForm({ title: '', description: '', price: '0', image_url: '', image_public_id: '' })
+  const resetForm = () => setCourseForm({ title: '', description: '', price: '0', grade: '', stream_ids: [], image_url: '', image_public_id: '' })
+
+  const toggleStream = (streamId: string) => {
+    setCourseForm((prev) => ({
+      ...prev,
+      stream_ids: prev.stream_ids.includes(streamId)
+        ? prev.stream_ids.filter((s) => s !== streamId)
+        : [...prev.stream_ids, streamId],
+    }))
+  }
 
   const validateCourseForm = (): { title: string; price: number; description: string | null } | null => {
     const title = courseForm.title.trim()
@@ -98,6 +112,8 @@ export default function AdminCoursesPage() {
       title: course.title,
       description: course.description || '',
       price: String(course.price),
+      grade: course.grade ? String(course.grade) : '',
+      stream_ids: course.stream_ids || [],
       image_url: course.image_url || '',
       image_public_id: course.image_public_id || '',
     })
@@ -136,12 +152,13 @@ export default function AdminCoursesPage() {
       await dispatch(createCourse({
         title: validated.title,
         subject: '',
-        grade: 0,
+        grade: courseForm.grade ? Number(courseForm.grade) : 0,
         course_type: 'video',
         price: validated.price,
         description: validated.description,
         image_url: imageUrl,
         image_public_id: imagePublicId,
+        stream_ids: [12, 13].includes(Number(courseForm.grade)) ? courseForm.stream_ids : undefined,
       })).unwrap()
 
       resetForm()
@@ -182,9 +199,11 @@ export default function AdminCoursesPage() {
         data: {
           title: validated.title,
           price: validated.price,
+          grade: courseForm.grade ? Number(courseForm.grade) : undefined,
           description: validated.description,
           image_url: imageUrl,
           image_public_id: imagePublicId,
+          stream_ids: [12, 13].includes(Number(courseForm.grade)) ? courseForm.stream_ids : [],
         },
       })).unwrap()
 
@@ -394,6 +413,39 @@ export default function AdminCoursesPage() {
                   required
                 />
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Grade</label>
+                <select
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-white"
+                  value={courseForm.grade}
+                  onChange={(e) => setCourseForm((prev) => ({ ...prev, grade: e.target.value }))}
+                >
+                  <option value="">All grades (ungated)</option>
+                  {[5, 6, 7, 8, 9, 10, 11, 12, 13].map((g) => (
+                    <option key={g} value={g}>Grade {g}{g === 10 || g === 11 ? ' (O/L)' : g === 12 || g === 13 ? ' (A/L)' : ''}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-400 mt-1">Grade 11 students also see Grade 10 courses; Grade 13 students also see Grade 12.</p>
+              </div>
+              {['12', '13'].includes(courseForm.grade) && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">A/L Streams</label>
+                  <div className="grid grid-cols-2 gap-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                    {streams.filter((s) => s.is_active).map((s) => (
+                      <label key={s.id} className="flex items-center gap-2 text-sm text-gray-700">
+                        <input
+                          type="checkbox"
+                          checked={courseForm.stream_ids.includes(s.id)}
+                          onChange={() => toggleStream(s.id)}
+                        />
+                        {s.name}
+                      </label>
+                    ))}
+                    {streams.length === 0 && <p className="text-xs text-gray-400 col-span-2">No streams configured yet.</p>}
+                  </div>
+                  <p className="text-xs text-gray-400 mt-1">Leave all unchecked to show this course to every A/L stream.</p>
+                </div>
+              )}
               <div className="flex gap-3 pt-4 border-t border-gray-200">
                 <button type="button" onClick={closeCreateModal} className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">
                   Cancel
@@ -455,6 +507,39 @@ export default function AdminCoursesPage() {
                   required
                 />
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Grade</label>
+                <select
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-white"
+                  value={courseForm.grade}
+                  onChange={(e) => setCourseForm((prev) => ({ ...prev, grade: e.target.value }))}
+                >
+                  <option value="">All grades (ungated)</option>
+                  {[5, 6, 7, 8, 9, 10, 11, 12, 13].map((g) => (
+                    <option key={g} value={g}>Grade {g}{g === 10 || g === 11 ? ' (O/L)' : g === 12 || g === 13 ? ' (A/L)' : ''}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-400 mt-1">Grade 11 students also see Grade 10 courses; Grade 13 students also see Grade 12.</p>
+              </div>
+              {['12', '13'].includes(courseForm.grade) && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">A/L Streams</label>
+                  <div className="grid grid-cols-2 gap-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                    {streams.filter((s) => s.is_active).map((s) => (
+                      <label key={s.id} className="flex items-center gap-2 text-sm text-gray-700">
+                        <input
+                          type="checkbox"
+                          checked={courseForm.stream_ids.includes(s.id)}
+                          onChange={() => toggleStream(s.id)}
+                        />
+                        {s.name}
+                      </label>
+                    ))}
+                    {streams.length === 0 && <p className="text-xs text-gray-400 col-span-2">No streams configured yet.</p>}
+                  </div>
+                  <p className="text-xs text-gray-400 mt-1">Leave all unchecked to show this course to every A/L stream.</p>
+                </div>
+              )}
               <div className="flex gap-3 pt-4 border-t border-gray-200">
                 <button type="button" onClick={closeEditModal} className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">
                   Cancel

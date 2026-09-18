@@ -171,9 +171,14 @@ export const deleteSubCourse = createAsyncThunk(
 
 export const fetchAvailableCourses = createAsyncThunk(
   'courses/fetchAvailableCourses',
-  async (_, { rejectWithValue }) => {
+  async (_, { getState, rejectWithValue }) => {
     try {
-      return await studentApi.getAvailableCourses()
+      const state = getState() as {
+        auth: { user: { profile?: { grade?: number | null; stream_id?: number | null } } | null }
+      }
+      const grade = state.auth.user?.profile?.grade
+      const streamId = state.auth.user?.profile?.stream_id
+      return await studentApi.getAvailableCourses(grade, streamId)
     } catch (error: any) {
       return rejectWithValue(getErrorMessage(error))
     }

@@ -54,7 +54,7 @@ export default function AdminNavbar() {
                 {label}
               </Link>
             ))}
-            {user?.role === 'super_admin' && (
+            {user?.role === 'admin' && (
               <Link
                 href="/admin/admins"
                 className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
@@ -112,7 +112,7 @@ export default function AdminNavbar() {
               {label}
             </Link>
           ))}
-          {user?.role === 'super_admin' && (
+          {user?.role === 'admin' && (
             <Link
               href="/admin/admins"
               className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
