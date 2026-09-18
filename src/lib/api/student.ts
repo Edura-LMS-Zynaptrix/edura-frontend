@@ -448,12 +448,18 @@ export const enrollFreeSubCourse = async (_subCourseId: string): Promise<Enrollm
   throw new Error('Free enrollment is not supported — enrollment is created automatically after a successful payment.')
 }
 
-export const enrollFreeCourse = async (_courseId: string): Promise<EnrollmentResponse> => {
-  throw new Error('Free enrollment is not supported — enrollment is created automatically after a successful payment.')
+// payment_service has no direct "create an enrollment" endpoint — every
+// enrollment (paid or free) is created by enrollment_service reacting to a
+// payment.success event. For a free course this hits a dedicated endpoint
+// that records a $0 payment and publishes that same event server-side,
+// after re-checking the price itself (never trusts a client-supplied price).
+export const enrollFreeCourse = async (courseId: string): Promise<EnrollmentResponse> => {
+  const response = await apiClient.post('/api/payments/free-enroll', { course_id: Number(courseId) })
+  return { message: response.data.message, enrollment_id: undefined, enrollment_type: 'course' }
 }
 
-export const enrollFreeVideoCourse = async (_courseId: string): Promise<EnrollmentResponse> => {
-  throw new Error('Free enrollment is not supported — enrollment is created automatically after a successful payment.')
+export const enrollFreeVideoCourse = async (courseId: string): Promise<EnrollmentResponse> => {
+  return enrollFreeCourse(courseId)
 }
 
 export const enrollFreeVideoModule = async (_moduleId: string): Promise<EnrollmentResponse> => {
@@ -568,6 +574,28 @@ export const startExam = async (examId: string): Promise<StartExamResponse> => {
   }
 }
 
+// Best-effort, fire-and-forget — a failed violation report shouldn't block
+// or disrupt the student's exam. The backend already has a real ViolationLog
+// table and endpoint; this was the missing piece that never called it, so
+// every tab-switch/screenshot "violation" was previously only ever visible
+// in the student's own browser tab and lost on refresh.
+export const reportViolation = async (
+  attemptId: string,
+  violationType: 'tab_switch' | 'copy_paste' | 'multiple_faces' | 'no_face' | 'other',
+  detail?: string
+): Promise<void> => {
+  const [examId, sessionId] = attemptId.split(':')
+  try {
+    await apiClient.post(`/api/assessments/${examId}/violations`, {
+      session_id: sessionId,
+      violation_type: violationType,
+      detail,
+    })
+  } catch {
+    // best-effort
+  }
+}
+
 export const submitExamAttempt = async (
   attemptId: string,
   payload: SubmitExamRequest
@@ -581,22 +609,44 @@ export const submitExamAttempt = async (
     })),
   })
   const data = response.data
+  return mapSubmitResponse(attemptId, examId, data)
+}
 
+function mapSubmitResponse(attemptId: string, examId: string, data: any): SubmitExamResponse {
   return {
     attempt_id: attemptId,
     marks_obtained: data.correct_count,
     total_questions: data.total_questions,
-    time_taken_seconds: 0,
-    review: [],
+    time_taken_seconds: data.time_taken_seconds ?? 0,
+    review: (data.review ?? []).map((r: any) => ({
+      question_id: String(r.question_id),
+      question_text: r.question_text,
+      explanation: r.explanation ?? null,
+      selected_option_id: r.selected_option_id ?? null,
+      correct_option_id: r.correct_option_id,
+      is_correct: r.is_correct,
+    })),
     ranking: {
       exam_id: examId,
-      course_id: '',
-      exam_title: '',
+      course_id: data.ranking?.course_id != null ? String(data.ranking.course_id) : '',
+      exam_title: data.ranking?.exam_title ?? '',
       course_title: '',
       subject: '',
-      overall_rank: null,
+      overall_rank: data.ranking?.overall_rank ?? null,
       district_rank: null,
     },
+  }
+}
+
+// Re-fetches a student's own last graded attempt — backs the ?view=results
+// deep link (e.g. from a "My Results" list) without needing the original
+// submit response to still be around client-side.
+export const getLastAttempt = async (examId: string): Promise<SubmitExamResponse | null> => {
+  try {
+    const response = await apiClient.get(`/api/assessments/${examId}/my-last-attempt`)
+    return mapSubmitResponse(`${examId}:`, examId, response.data)
+  } catch {
+    return null
   }
 }
 
@@ -695,10 +745,6 @@ export const getRankingsLeaderboard = async (
   }))
 }
 
-export const getLastAttempt = async (_examId: string) => {
-  // assessment_service has no "last attempt" lookup endpoint.
-  return null
-}
 
 export interface TopCourse {
   id: string
@@ -798,21 +844,37 @@ export const fetchAttemptReview = async (_attemptId: string): Promise<any> => {
 
 // Video Classes — reuses the same real course_service + content_service data
 // as getCourseOverview (Edura doesn't distinguish "exam courses" from "video
-// classes"; every course exposes whatever modules/lessons it has).
+// classes"; every course exposes whatever modules/lessons it has), enriched
+// with each lesson's real watched/completed state from progress_service.
 export const getVideoClassDetails = async (courseId: string): Promise<Course> => {
-  return getCourseOverview(courseId)
+  const course = await getCourseOverview(courseId)
+  try {
+    const progressRes = await apiClient.get(`/api/progress/courses/${courseId}/lessons/progress`)
+    const completedIds = new Set(progressRes.data.filter((p: any) => p.is_completed).map((p: any) => String(p.lesson_id)))
+    course.modules = (course.modules ?? []).map((m) => ({
+      ...m,
+      videos: m.videos.map((v) => ({ ...v, is_completed: completedIds.has(v.id) })),
+    }))
+  } catch {
+    // Not enrolled yet, or progress_service unreachable — videos just show as not-yet-watched.
+  }
+  return course
 }
 
 export const updateVideoProgress = async (data: {
+  course_id: string
   video_id: string
-  is_completed: boolean
-  watched_percentage: number
+  total_lessons?: number
+  watch_duration_seconds?: number
+  last_position_seconds?: number
 }) => {
-  // progress_service only updates lesson-watched state via a RabbitMQ event
-  // published elsewhere — there's no direct REST endpoint for the frontend to
-  // call, so this only updates local UI state (echoed back) rather than
-  // persisting anything server-side.
-  return data
+  const response = await apiClient.post(`/api/progress/courses/${data.course_id}/lessons/progress`, {
+    lesson_id: Number(data.video_id),
+    total_lessons: data.total_lessons,
+    watch_duration_seconds: data.watch_duration_seconds ?? 0,
+    last_position_seconds: data.last_position_seconds ?? 0,
+  })
+  return response.data
 }
 
 // ── Class Packages ──────────────────────────────────────────────────────────

@@ -332,7 +332,7 @@ function StudentExamPageContent() {
     if (viewResults) {
       setLoadingPastResult(true)
       dispatch(fetchLastAttempt(examId)).then((resAction) => {
-        if (fetchLastAttempt.fulfilled.match(resAction)) {
+        if (fetchLastAttempt.fulfilled.match(resAction) && resAction.payload) {
           setResult(resAction.payload)
           setPhase('result')
         } else {
@@ -430,7 +430,7 @@ function StudentExamPageContent() {
           setLoadingPastResult(true)
           try {
             const resAction = await dispatch(fetchLastAttempt(examId))
-            if (fetchLastAttempt.fulfilled.match(resAction)) {
+            if (fetchLastAttempt.fulfilled.match(resAction) && resAction.payload) {
               setResult(resAction.payload)
               setPhase('result')
             }
@@ -479,6 +479,7 @@ function StudentExamPageContent() {
 
         setIsPageVisible(false)
         setVisibilityWarnings((prev) => prev + 1)
+        if (examData) studentApi.reportViolation(examData.attempt_id, 'tab_switch')
         // Clear answers on desktop tab-switch — answers remain wiped when they return
         setAnswers((prev) => {
           const cleared: Record<string, string | null> = {}
@@ -504,6 +505,7 @@ function StudentExamPageContent() {
           type: 'error'
         })
         setVisibilityWarnings((prev) => prev + 1)
+        if (examData) studentApi.reportViolation(examData.attempt_id, 'other', 'screenshot_attempt')
         setAnswers((prev) => {
           const cleared: Record<string, string | null> = {}
           Object.keys(prev).forEach((k) => (cleared[k] = null))
@@ -525,7 +527,7 @@ function StudentExamPageContent() {
       document.removeEventListener('keydown', preventScreenshot)
       document.removeEventListener('contextmenu', preventContextMenu)
     }
-  }, [phase, result])
+  }, [phase, result, examData])
 
   // ── Countdown timer & auto-submit ────────────────────────────────────────
   useEffect(() => {

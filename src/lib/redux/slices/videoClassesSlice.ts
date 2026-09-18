@@ -35,7 +35,7 @@ export const fetchVideoClassDetails = createAsyncThunk(
 
 export const updateProgress = createAsyncThunk(
     'videoClasses/updateProgress',
-    async (data: { video_id: string; is_completed: boolean; watched_percentage: number }, { rejectWithValue }) => {
+    async (data: { course_id: string; video_id: string; total_lessons?: number; watch_duration_seconds?: number; last_position_seconds?: number }, { rejectWithValue }) => {
         try {
             return await studentApi.updateVideoProgress(data)
         } catch (error: any) {

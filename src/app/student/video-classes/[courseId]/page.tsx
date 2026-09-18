@@ -417,10 +417,12 @@ export default function VideoClassPlayerPage() {
   const markAsCompleted = async (video: VideoLesson) => {
     if (video.is_completed) return
     try {
+      const totalLessons = course.modules.reduce((acc: number, m: any) => acc + (m.videos?.length || 0), 0)
       await studentApi.updateVideoProgress({
+        course_id: courseId,
         video_id: video.id,
-        is_completed: true,
-        watched_percentage: 100
+        total_lessons: totalLessons,
+        watch_duration_seconds: video.duration_seconds || 0,
       })
       setCourse((prev: any) => ({
         ...prev,
