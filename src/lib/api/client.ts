@@ -88,7 +88,14 @@ apiClient.interceptors.response.use(
       requestUrl.includes('/api/auth/register') ||
       requestUrl.includes('/api/auth/refresh')
 
-    if (error.response?.status === 401 && !originalRequest._retry && !isAuthRoute) {
+    // Only treat a 401 as "session expired" when we actually had a token to
+    // begin with. An anonymous visitor (e.g. on the public home page, whose
+    // widgets speculatively call protected endpoints) legitimately gets 401s
+    // that have nothing to do with a session — forcing them to /login for
+    // those was the bug.
+    const hadToken = !!getStoredToken('accessToken')
+
+    if (error.response?.status === 401 && hadToken && !originalRequest._retry && !isAuthRoute) {
       originalRequest._retry = true
 
       try {

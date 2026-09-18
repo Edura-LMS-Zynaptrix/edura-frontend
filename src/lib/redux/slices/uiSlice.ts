@@ -19,6 +19,11 @@ const initialState: UIState = {
   loadingMessage: null,
 }
 
+// Date.now() alone collides when two notifications fire in the same
+// millisecond (e.g. two showNotification dispatches back-to-back during
+// login) — pairing it with a monotonic counter keeps ids unique.
+let notificationSeq = 0
+
 const uiSlice = createSlice({
   name: 'ui',
   initialState,
@@ -26,7 +31,7 @@ const uiSlice = createSlice({
     showNotification: (state, action: PayloadAction<Omit<Notification, 'id'>>) => {
       const notification: Notification = {
         ...action.payload,
-        id: Date.now().toString(),
+        id: `${Date.now()}-${++notificationSeq}`,
       }
       state.notifications.push(notification)
     },
