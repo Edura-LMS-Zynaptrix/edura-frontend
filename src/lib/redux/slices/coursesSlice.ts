@@ -146,9 +146,12 @@ export const createSubCourse = createAsyncThunk(
 
 export const updateSubCourse = createAsyncThunk(
   'courses/updateSubCourse',
-  async ({ id, data }: { id: string; data: SubCourseUpdateData }, { rejectWithValue }) => {
+  async (
+    { courseId, id, data }: { courseId: string; id: string; data: SubCourseUpdateData },
+    { rejectWithValue }
+  ) => {
     try {
-      return await adminApi.updateSubCourse(id, data)
+      return await adminApi.updateSubCourse(courseId, id, data)
     } catch (error: any) {
       return rejectWithValue(getErrorMessage(error))
     }
@@ -157,9 +160,9 @@ export const updateSubCourse = createAsyncThunk(
 
 export const deleteSubCourse = createAsyncThunk(
   'courses/deleteSubCourse',
-  async (id: string, { rejectWithValue }) => {
+  async ({ courseId, id }: { courseId: string; id: string }, { rejectWithValue }) => {
     try {
-      await adminApi.deleteSubCourse(id)
+      await adminApi.deleteSubCourse(courseId, id)
       return id
     } catch (error: any) {
       return rejectWithValue(getErrorMessage(error))
@@ -219,18 +222,6 @@ export const fetchSubCourseExams = createAsyncThunk(
   }
 )
 
-export const enrollFreeSubCourseThunk = createAsyncThunk(
-  'courses/enrollFreeSubCourse',
-  async (subCourseId: string, { rejectWithValue }) => {
-    try {
-      const response = await studentApi.enrollFreeSubCourse(subCourseId)
-      return { subCourseId, ...response }
-    } catch (error: any) {
-      return rejectWithValue(getErrorMessage(error))
-    }
-  }
-)
-
 export const enrollFreeCourseThunk = createAsyncThunk(
   'courses/enrollFreeCourse',
   async (courseId: string, { rejectWithValue }) => {
@@ -249,18 +240,6 @@ export const enrollFreeVideoCourseThunk = createAsyncThunk(
     try {
       const response = await studentApi.enrollFreeVideoCourse(courseId)
       return { courseId, ...response }
-    } catch (error: any) {
-      return rejectWithValue(getErrorMessage(error))
-    }
-  }
-)
-
-export const enrollFreeModuleThunk = createAsyncThunk(
-  'courses/enrollFreeModule',
-  async (moduleId: string, { rejectWithValue }) => {
-    try {
-      const response = await studentApi.enrollFreeVideoModule(moduleId)
-      return { moduleId, ...response }
     } catch (error: any) {
       return rejectWithValue(getErrorMessage(error))
     }
@@ -417,8 +396,6 @@ const coursesSlice = createSlice({
       })
       .addCase(deleteSubCourse.fulfilled, (state, action: PayloadAction<string>) => {
         state.isLoading = false
-        // We'll need to remove it from the corresponding course's sub_courses array.
-        // We iterate through courses since we don't have course_id in the payload easily available from delete response (unless returned).
         state.courses.forEach(course => {
           if (course.sub_courses) {
             course.sub_courses = course.sub_courses.filter(sc => sc.id !== action.payload)
@@ -495,26 +472,6 @@ const coursesSlice = createSlice({
         state.studentError = typeof p === 'string' ? p : 'Failed to load module exams.'
       })
 
-      // enrollFreeSubCourseThunk
-      .addCase(enrollFreeSubCourseThunk.pending, (state) => {
-        state.studentLoading = true
-        state.studentError = null
-      })
-      .addCase(enrollFreeSubCourseThunk.fulfilled, (state, action) => {
-        state.studentLoading = false
-        if (state.currentCourse && state.currentCourse.sub_courses) {
-          const idx = state.currentCourse.sub_courses.findIndex(sc => sc.id === action.payload.subCourseId)
-          if (idx !== -1) {
-            state.currentCourse.sub_courses[idx].is_enrolled = true
-          }
-        }
-      })
-      .addCase(enrollFreeSubCourseThunk.rejected, (state, action) => {
-        state.studentLoading = false
-        const p = action.payload as any
-        state.studentError = typeof p === 'string' ? p : 'Failed to enroll in the module.'
-      })
-
       // enrollFreeCourseThunk
       .addCase(enrollFreeCourseThunk.pending, (state) => {
         state.studentLoading = true
@@ -547,24 +504,6 @@ const coursesSlice = createSlice({
         state.studentError = action.payload as string
       })
 
-      // enrollFreeModuleThunk
-      .addCase(enrollFreeModuleThunk.pending, (state) => {
-        state.studentLoading = true
-        state.studentError = null
-      })
-      .addCase(enrollFreeModuleThunk.fulfilled, (state, action) => {
-        state.studentLoading = false
-        if (state.currentCourse && state.currentCourse.modules) {
-          const idx = state.currentCourse.modules.findIndex(m => m.id === action.payload.moduleId)
-          if (idx !== -1) {
-            state.currentCourse.modules[idx].is_enrolled = true
-          }
-        }
-      })
-      .addCase(enrollFreeModuleThunk.rejected, (state, action) => {
-        state.studentLoading = false
-        state.studentError = action.payload as string
-      })
   },
 })
 

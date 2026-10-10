@@ -10,7 +10,7 @@ import { fetchExams } from '@/lib/redux/slices/examsSlice'
 import { fetchQuestions, createQuestion, updateQuestion, deleteQuestion, importQuestionsCSV } from '@/lib/redux/slices/questionsSlice'
 import { uploadImageThunk, deleteImageThunk } from '@/lib/redux/slices/coursesSlice'
 import { getErrorMessage } from '@/lib/utils'
-import { uploadQuestionImagesZip, type ZipUploadResult } from '@/lib/api/admin'
+import { downloadQuestionsCSVTemplate, uploadQuestionImagesZip, type ZipUploadResult } from '@/lib/api/admin'
 
 type Course = {
   id: string
@@ -110,6 +110,7 @@ export default function QuestionsPage() {
   const [optionImageFiles, setOptionImageFiles] = useState<{ [key: number]: File | null }>({})
   const [csvFile, setCsvFile] = useState<File | null>(null)
 
+  const [downloadingTemplate, setDownloadingTemplate] = useState(false)
   // ZIP image upload state
   const [showZipModal, setShowZipModal] = useState(false)
   const [zipFile, setZipFile] = useState<File | null>(null)
@@ -442,6 +443,17 @@ export default function QuestionsPage() {
       setLocalError(getErrorMessage(err) || 'Failed to import questions')
     } finally {
       setIsCreating(false)
+    }
+  }
+
+  const handleDownloadTemplate = async () => {
+    try {
+      setDownloadingTemplate(true)
+      await downloadQuestionsCSVTemplate()
+    } catch (err: any) {
+      setLocalError(getErrorMessage(err) || 'Failed to download template')
+    } finally {
+      setDownloadingTemplate(false)
     }
   }
 
@@ -1240,24 +1252,27 @@ export default function QuestionsPage() {
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                 <div className="flex items-start justify-between mb-2">
                   <h4 className="text-sm font-semibold text-blue-900">CSV Format</h4>
-                  <a
-                    href="/api/v1/admin/questions/csv-template"
-                    download="questions_template.csv"
-                    className="text-xs bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700"
+                  <button
+                    type="button"
+                    onClick={handleDownloadTemplate}
+                    disabled={downloadingTemplate}
+                    className="text-xs bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 disabled:opacity-50"
                   >
-                    Download Template
-                  </a>
+                    {downloadingTemplate ? 'Downloading...' : 'Download Template'}
+                  </button>
                 </div>
                 <p className="text-sm text-blue-800 mb-3">
                   Your CSV file should have the following columns:
                 </p>
                 <code className="block bg-white p-3 rounded text-xs font-mono text-gray-800 overflow-x-auto">
-                  question_text,option_a,option_b,option_c,option_d,correct_answer,explanation
+                  question_text,option_a,option_b,option_c,option_d,option_e,correct_answer,explanation
                 </code>
                 <ul className="mt-3 text-sm text-blue-800 space-y-1">
-                  <li>• <strong>correct_answer</strong> should be A, B, C, or D</li>
-                  <li>• <strong>explanation</strong> is optional</li>
-                  <li>• Images cannot be imported via CSV — use the "Upload Images ZIP" button after importing</li>
+                  <li>• <strong>option_a</strong> and <strong>option_b</strong> are required; <strong>option_c</strong>–<strong>option_e</strong> are optional</li>
+                  <li>• <strong>correct_answer</strong> is the letter of a filled option (A–E)</li>
+                  <li>• <strong>explanation</strong> is optional and is shown to students after they submit</li>
+                  <li>• Rows with problems are skipped and listed; the rest still import</li>
+                  <li>• Add images afterwards with the "Upload Images ZIP" button</li>
                 </ul>
               </div>
 
@@ -1276,7 +1291,7 @@ export default function QuestionsPage() {
 
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                 <p className="text-sm text-yellow-800">
-                  <strong>Note:</strong> Questions will be appended to existing questions. You can edit each question later to add images if needed.
+                  <strong>Note:</strong> Questions are appended after the existing ones. Save the file as UTF-8 CSV (Excel: "CSV UTF-8").
                 </p>
               </div>
 

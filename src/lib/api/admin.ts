@@ -10,6 +10,7 @@
  * empty default or reject clearly — never a fabricated network call.
  */
 import apiClient from './client'
+import { mapAttemptReview } from './student'
 import * as paymentApi from './payment'
 
 // ── Types (unchanged from the original ExamBuddy shape) ─────────────────────
@@ -146,12 +147,11 @@ export interface VideoUpdateData {
   duration_seconds?: number
   order_number?: number
   is_published?: boolean
-  cloudinary_asset_url?: string | null
-  cloudinary_public_id?: string | null
 }
 
 export interface MaterialCreateData {
   module_id: string
+  video_id?: string | null
   title: string
   file_url: string
   file_type: string
@@ -160,6 +160,7 @@ export interface MaterialCreateData {
 }
 
 export interface MaterialUpdateData {
+  video_id?: string | null
   title?: string
   file_url?: string
   file_type?: string
@@ -358,22 +359,27 @@ export interface StudentProgressSummary {
   avg_score_pct: number
 }
 
-// progress_service's dashboard is keyed by (student, course), not by student
-// alone — this aggregate, cross-course shape has no equivalent endpoint.
-export const getStudentProgress = async (_userId: string): Promise<StudentProgressData> => {
-  throw new Error('Aggregate student progress analytics are not supported by the Edura backend yet.')
+// Composed by analytics_service from enrollment, assessment, course and user data.
+export const getStudentProgress = async (userId: string): Promise<StudentProgressData> => {
+  const response = await apiClient.get(`/api/analytics/students/${userId}/progress`)
+  return response.data
 }
 
 export const getAllStudentsProgressSummary = async (): Promise<StudentProgressSummary[]> => {
-  return []
+  const response = await apiClient.get('/api/analytics/students/progress-summary')
+  return response.data
 }
 
-export const sendStudentReportDetail = async (_userId: string): Promise<{ message: string }> => {
-  throw new Error('Report generation is not supported by the Edura backend yet.')
+// The PDF is built by analytics_service and emailed by notification_service.
+export const sendStudentReportDetail = async (userId: string): Promise<{ message: string }> => {
+  const response = await apiClient.post(`/api/analytics/students/${userId}/send-report`)
+  return response.data
 }
 
-export const fetchStudentAttemptReview = async (_userId: string, _attemptId: string): Promise<any> => {
-  throw new Error('Attempt review is not supported by the Edura backend yet.')
+// The attempt id identifies the student already; userId is kept for the page's URL shape.
+export const fetchStudentAttemptReview = async (_userId: string, attemptId: string): Promise<any> => {
+  const response = await apiClient.get(`/api/assessments/submissions/${attemptId}/review`)
+  return mapAttemptReview(response.data)
 }
 
 // Analytics — analytics_service is an empty stub in Edura today.
@@ -390,7 +396,7 @@ export interface AnalyticsData {
 export interface StrugglePerformanceItem {
   id: string
   title: string
-  type: 'exam' | 'subcourse'
+  type: 'exam' | 'lesson'
   avg_score: number
   failure_rate: number
   total_students: number
@@ -434,8 +440,10 @@ export const getAdminAnalytics = async (): Promise<AnalyticsData> => {
   }
 }
 
-export const getCourseStruggleAnalysis = async (_courseId: string): Promise<CourseStruggleResponse> => {
-  throw new Error('Struggle analysis is not supported by the Edura backend yet.')
+// First attempts only, so retakes don't hide where students struggle.
+export const getCourseStruggleAnalysis = async (courseId: string): Promise<CourseStruggleResponse> => {
+  const response = await apiClient.get(`/api/analytics/courses/${courseId}/struggle`)
+  return response.data
 }
 
 // Rankings (real, when an exam_id is given — resolved via progress_service)
@@ -608,13 +616,30 @@ export const deleteGradeSubject = async (id: string): Promise<void> => {
 
 // Course Management (real: course_service)
 
+// A course_service module is the "lesson" level of both course types: video
+// courses put videos + materials inside it, exam courses put exams inside it.
+function mapAdminModule(m: any): any {
+  return {
+    id: String(m.id),
+    course_id: String(m.course_id),
+    title: m.title,
+    description: m.description ?? null,
+    image_url: m.image_url ?? null,
+    image_public_id: m.image_public_id ?? null,
+    order_number: m.order ?? 0,
+    is_active: m.is_active ?? true,
+    video_count: m.lesson_count ?? 0,
+    created_at: m.created_at,
+  }
+}
+
 function mapAdminCourse(c: any): any {
   return {
     id: String(c.id),
     title: c.title,
     subject: '',
     grade: c.grade ?? 0,
-    course_type: 'video',
+    course_type: c.course_type ?? 'video',
     image_url: c.thumbnail_url ?? null,
     image_public_id: c.thumbnail_public_id ?? null,
     price: Number(c.price ?? 0),
@@ -622,12 +647,21 @@ function mapAdminCourse(c: any): any {
     is_active: c.status === 'PUBLISHED',
     status: c.status,
     stream_ids: (c.stream_ids ?? []).map(String),
+    sub_courses: (c.modules ?? []).map(mapAdminModule),
   }
 }
 
 export const getCourses = async () => {
-  const response = await apiClient.get('/api/courses/')
-  return response.data.items.map(mapAdminCourse)
+  const pageSize = 100
+  const items: any[] = []
+  for (let page = 1; ; page++) {
+    const response = await apiClient.get('/api/courses/', {
+      params: { include_modules: true, page, page_size: pageSize },
+    })
+    items.push(...response.data.items)
+    if (items.length >= response.data.total || response.data.items.length < pageSize) break
+  }
+  return items.map(mapAdminCourse)
 }
 
 export const createCourse = async (data: {
@@ -645,6 +679,7 @@ export const createCourse = async (data: {
     title: data.title,
     description: data.description,
     price: data.price,
+    course_type: data.course_type,
     grade: data.grade || undefined,
     stream_ids: data.stream_ids?.length ? data.stream_ids.map(Number) : undefined,
     thumbnail_url: data.image_url,
@@ -669,6 +704,7 @@ export const updateCourse = async (id: string, data: {
     title: data.title,
     description: data.description,
     price: data.price,
+    course_type: data.course_type,
     grade: data.grade || undefined,
     stream_ids: data.stream_ids ? data.stream_ids.map(Number) : undefined,
     status: data.status,
@@ -683,22 +719,24 @@ export const deleteCourse = async (id: string) => {
   return { message: 'Course deleted' }
 }
 
-// Sub-Course Management — Edura has no exam-grouping construct under a
-// course (only modules, which group video lessons — see Video Classes below).
-export const getSubCourses = async (_courseId?: string) => {
-  return []
+// Exam-course lessons ("sub-courses" in the ported pages) are the same
+// course_service modules that video courses use.
+export const getSubCourses = async (courseId: string) => {
+  return getModules(courseId)
 }
 
-export const createSubCourse = async (_data: SubCourseCreateData): Promise<any> => {
-  throw new Error('Sub-courses are not supported by the Edura backend.')
+export const createSubCourse = async (data: SubCourseCreateData): Promise<any> => {
+  return createModule(data)
 }
 
-export const updateSubCourse = async (_id: string, _data: SubCourseUpdateData): Promise<any> => {
-  throw new Error('Sub-courses are not supported by the Edura backend.')
+export const updateSubCourse = async (courseId: string, id: string, data: SubCourseUpdateData): Promise<any> => {
+  return updateModuleForCourse(courseId, id, data)
 }
 
-export const deleteSubCourse = async (_id: string): Promise<any> => {
-  throw new Error('Sub-courses are not supported by the Edura backend.')
+export const deleteSubCourse = async (courseId: string, id: string): Promise<any> => {
+  // Exams live in assessment_service, so clear them before the lesson itself.
+  await apiClient.delete(`/api/assessments/by-module/${id}`, { params: { course_id: courseId } })
+  return deleteModuleForCourse(courseId, id)
 }
 
 // Exam Management (real: assessment_service)
@@ -707,18 +745,22 @@ function mapAdminExam(a: any): any {
   return {
     id: String(a.id),
     course_id: String(a.course_id),
-    sub_course_id: null,
+    sub_course_id: a.module_id != null ? String(a.module_id) : null,
     title: a.title,
-    image_url: null,
+    image_url: a.image_url ?? null,
+    image_public_id: a.image_public_id ?? null,
     description: a.description ?? null,
     duration_minutes: a.time_limit_minutes ?? 0,
-    total_questions: 0, // not tracked on the assessment itself
+    total_questions: a.question_count ?? 0,
     price: 0, // exams aren't priced separately from their course in Edura
-    order_number: 0,
-    scheduled_start: null,
+    order_number: a.position ?? 0,
+    scheduled_start: a.scheduled_start ?? null,
     is_published: a.is_published,
   }
 }
+
+// datetime-local inputs give local wall-clock time without a zone.
+const toIsoOrNull = (value?: string | null) => (value ? new Date(value).toISOString() : null)
 
 export const getExams = async (courseId?: string) => {
   if (!courseId) return []
@@ -729,22 +771,34 @@ export const getExams = async (courseId?: string) => {
 export const createExam = async (data: ExamCreateData): Promise<any> => {
   const response = await apiClient.post('/api/assessments/', {
     course_id: Number(data.course_id),
+    module_id: data.sub_course_id ? Number(data.sub_course_id) : null,
     title: data.title,
     description: data.description,
     assessment_type: 'exam',
     time_limit_minutes: data.duration_minutes,
-    is_published: data.is_published,
+    image_url: data.image_url ?? null,
+    image_public_id: data.image_public_id ?? null,
+    position: data.order_number ?? 0,
+    scheduled_start: toIsoOrNull(data.scheduled_start),
+    // Lesson is_active + scheduled_start gate student visibility, as in ExamBuddy.
+    is_published: data.is_published ?? true,
   })
   return mapAdminExam(response.data)
 }
 
 export const updateExam = async (id: string, data: ExamUpdateData): Promise<any> => {
-  const response = await apiClient.put(`/api/assessments/${id}`, {
+  const body: Record<string, unknown> = {
     title: data.title,
     description: data.description,
     time_limit_minutes: data.duration_minutes,
     is_published: data.is_published,
-  })
+    position: data.order_number,
+  }
+  if (data.sub_course_id !== undefined) body.module_id = data.sub_course_id ? Number(data.sub_course_id) : null
+  if (data.image_url !== undefined) body.image_url = data.image_url
+  if (data.image_public_id !== undefined) body.image_public_id = data.image_public_id
+  if (data.scheduled_start !== undefined) body.scheduled_start = toIsoOrNull(data.scheduled_start)
+  const response = await apiClient.put(`/api/assessments/${id}`, body)
   return mapAdminExam(response.data)
 }
 
@@ -755,8 +809,14 @@ export interface ZipUploadResult {
   message: string
 }
 
-export const uploadQuestionImagesZip = async (_examId: string, _file: File): Promise<ZipUploadResult> => {
-  throw new Error('Bulk question image upload is not supported by the Edura backend yet.')
+// Images named {question_number}-{n}.png: n = 0 question image, 1-5 options A-E.
+export const uploadQuestionImagesZip = async (examId: string, file: File): Promise<ZipUploadResult> => {
+  const formData = new FormData()
+  formData.append('file', file)
+  const response = await apiClient.post(`/api/assessments/${examId}/questions/images-zip`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+  return response.data
 }
 
 export const deleteExam = async (id: string): Promise<any> => {
@@ -785,37 +845,56 @@ export const uploadImage = async (file: File, _entity: string) => {
   }
 }
 
-export const deleteImage = async (_publicId: string): Promise<any> => {
-  throw new Error('Deleting uploaded assets is not supported by the Edura backend yet.')
+export const deleteImage = async (publicId: string): Promise<any> => {
+  await apiClient.delete('/api/content/assets', { params: { public_id: publicId } })
+  return { message: 'Asset deleted' }
 }
 
-export const uploadFile = async (file: File, entity: string = 'materials') => {
-  return uploadImage(file, entity)
+// Downloadable materials (pdf/doc/docx/zip/images) — stored as Cloudinary raw files.
+export const uploadFile = async (file: File, _entity: string = 'materials') => {
+  const formData = new FormData()
+  formData.append('file', file)
+  const response = await apiClient.post('/api/content/upload-material', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+  return {
+    file_url: response.data.secure_url as string,
+    file_public_id: response.data.public_id as string,
+    file_type: response.data.mime_type as string,
+  }
 }
 
 // Question Management (real: assessment_service)
 
 function mapAdminQuestion(q: any): any {
   const options = (q.options as string[]) ?? []
+  const images = (q.option_images as ({ url: string; public_id: string | null } | null)[]) ?? []
   return {
     id: String(q.id),
     exam_id: String(q.assessment_id),
     question_text: q.question_text,
-    question_image_url: null,
-    question_image_public_id: null,
-    explanation: null,
+    question_image_url: q.question_image_url ?? null,
+    question_image_public_id: q.question_image_public_id ?? null,
+    explanation: q.explanation ?? null,
     video_url: null,
     order_number: q.position,
     options: options.map((text: string, idx: number) => ({
       id: `${q.id}-${idx}`,
       option_text: text,
-      option_image_url: null,
-      option_image_public_id: null,
+      option_image_url: images[idx]?.url ?? null,
+      option_image_public_id: images[idx]?.public_id ?? null,
       is_correct: text === q.correct_answer,
       order_number: idx,
     })),
   }
 }
+
+const toOptionInput = (o: any) => ({
+  option_text: o.option_text ?? '',
+  is_correct: o.is_correct,
+  option_image_url: o.option_image_url ?? null,
+  option_image_public_id: o.option_image_public_id ?? null,
+})
 
 export const getQuestions = async (examId: string) => {
   const response = await apiClient.get(`/api/assessments/${examId}/questions`)
@@ -830,7 +909,10 @@ export const createQuestion = async (data: QuestionCreateData): Promise<any> => 
   const response = await apiClient.post(`/api/assessments/${data.exam_id}/questions`, {
     question_text: data.question_text,
     question_type: 'mcq',
-    options: data.options.map((o) => ({ option_text: o.option_text ?? '', is_correct: o.is_correct })),
+    options: data.options.map(toOptionInput),
+    explanation: data.explanation ?? null,
+    question_image_url: data.question_image_url ?? null,
+    question_image_public_id: data.question_image_public_id ?? null,
     marks: 1,
     position: data.order_number,
   })
@@ -840,7 +922,10 @@ export const createQuestion = async (data: QuestionCreateData): Promise<any> => 
 export const updateQuestion = async (id: string, data: QuestionUpdateData): Promise<any> => {
   const response = await apiClient.put(`/api/assessments/questions/${id}`, {
     question_text: data.question_text,
-    options: data.options?.map((o: any) => ({ option_text: o.option_text ?? '', is_correct: o.is_correct })),
+    options: data.options?.map(toOptionInput),
+    explanation: data.explanation,
+    question_image_url: data.question_image_url,
+    question_image_public_id: data.question_image_public_id,
     position: data.order_number,
   })
   return mapAdminQuestion(response.data)
@@ -851,11 +936,35 @@ export const deleteQuestion = async (id: string): Promise<any> => {
   return { message: 'Question deleted' }
 }
 
-export const importQuestionsCSV = async (_examId: string, _file: File): Promise<any> => {
-  throw new Error('CSV question import is not supported by the Edura backend yet.')
+export const importQuestionsCSV = async (
+  examId: string,
+  file: File
+): Promise<{ message: string; questions_created: number; errors: string[] }> => {
+  const formData = new FormData()
+  formData.append('file', file)
+  const response = await apiClient.post(`/api/assessments/${examId}/questions/import-csv`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+  return response.data
 }
 
-// Bulk exam import — not supported.
+// A plain <a href> can't carry the bearer token, so fetch it as a blob and
+// hand the browser an object URL to save.
+export const downloadQuestionsCSVTemplate = async (): Promise<void> => {
+  const response = await apiClient.get('/api/assessments/questions/csv-template', {
+    responseType: 'blob',
+  })
+  const url = URL.createObjectURL(new Blob([response.data], { type: 'text/csv' }))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = 'questions_template.csv'
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}
+
+// Bulk exam import (assessment_service): exams.csv + questions/<folder>/ bundle.
 
 export interface BulkImportExamDetail {
   folder: string
@@ -875,22 +984,36 @@ export interface BulkImportResult {
 }
 
 export const bulkImportExams = async (
-  _courseId: string,
-  _subCourseId: string,
-  _file: File,
+  courseId: string,
+  subCourseId: string,
+  file: File,
 ): Promise<BulkImportResult> => {
-  throw new Error('Bulk exam import is not supported by the Edura backend yet.')
+  const formData = new FormData()
+  formData.append('file', file)
+  const response = await apiClient.post('/api/assessments/bulk-import', formData, {
+    params: { course_id: Number(courseId), module_id: subCourseId ? Number(subCourseId) : undefined },
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+  return response.data
 }
 
 export const downloadBulkImportTemplate = async (): Promise<void> => {
-  throw new Error('Bulk exam import is not supported by the Edura backend yet.')
+  const response = await apiClient.get('/api/assessments/bulk-import/template', { responseType: 'blob' })
+  const url = URL.createObjectURL(new Blob([response.data], { type: 'application/zip' }))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = 'bulk_exam_template.zip'
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
 }
 
 // Video Classes Management (real: course_service modules + lessons)
 
 export const getModules = async (courseId: string) => {
   const response = await apiClient.get(`/api/courses/${courseId}/modules`)
-  return response.data
+  return response.data.map(mapAdminModule)
 }
 
 export const getModule = async (_moduleId: string): Promise<any> => {
@@ -900,9 +1023,13 @@ export const getModule = async (_moduleId: string): Promise<any> => {
 export const createModule = async (data: ModuleCreateData) => {
   const response = await apiClient.post(`/api/courses/${data.course_id}/modules`, {
     title: data.title,
+    description: data.description ?? null,
+    image_url: data.image_url ?? null,
+    image_public_id: data.image_public_id ?? null,
+    is_active: data.is_active ?? true,
     order: data.order_number,
   })
-  return response.data
+  return mapAdminModule(response.data)
 }
 
 export const updateModule = async (_id: string, _data: ModuleUpdateData): Promise<any> => {
@@ -912,9 +1039,13 @@ export const updateModule = async (_id: string, _data: ModuleUpdateData): Promis
 export const updateModuleForCourse = async (courseId: string, moduleId: string, data: ModuleUpdateData) => {
   const response = await apiClient.put(`/api/courses/${courseId}/modules/${moduleId}`, {
     title: data.title,
+    description: data.description,
+    image_url: data.image_url,
+    image_public_id: data.image_public_id,
+    is_active: data.is_active,
     order: data.order_number,
   })
-  return response.data
+  return mapAdminModule(response.data)
 }
 
 export const deleteModuleForCourse = async (courseId: string, moduleId: string) => {
@@ -936,22 +1067,11 @@ function mapAdminLesson(l: any): any {
     id: String(l.id),
     module_id: String(l.module_id),
     title: l.title,
-    description: null,
+    description: l.description ?? null,
     yt_video_id: l.youtube_video_id ?? '',
-    cloudinary_asset_url: l.cloudinary_asset_url ?? null,
     duration_seconds: l.duration_seconds ?? 0,
     order_number: l.order ?? 0,
     is_published: true, // course_service has no per-lesson publish flag
-    materials: l.cloudinary_asset_url
-      ? [{
-          id: `${l.id}-attachment`,
-          title: 'Attachment',
-          file_url: l.cloudinary_asset_url,
-          file_public_id: l.cloudinary_public_id ?? null,
-          file_type: '',
-          order_number: 0,
-        }]
-      : [],
   }
 }
 
@@ -967,6 +1087,7 @@ export const createVideo = async (_data: VideoCreateData): Promise<any> => {
 export const createVideoForModule = async (courseId: string, data: VideoCreateData) => {
   const response = await apiClient.post(`/api/courses/${courseId}/modules/${data.module_id}/lessons`, {
     title: data.title,
+    description: data.description ?? null,
     youtube_video_id: data.yt_video_id,
     duration_seconds: data.duration_seconds,
     order: data.order_number,
@@ -986,11 +1107,10 @@ export const updateVideoForModule = async (
 ) => {
   const response = await apiClient.put(`/api/courses/${courseId}/modules/${moduleId}/lessons/${lessonId}`, {
     title: data.title,
+    description: data.description,
     youtube_video_id: data.yt_video_id,
     duration_seconds: data.duration_seconds,
     order: data.order_number,
-    cloudinary_asset_url: data.cloudinary_asset_url,
-    cloudinary_public_id: data.cloudinary_public_id,
   })
   return mapAdminLesson(response.data)
 }
@@ -1004,50 +1124,118 @@ export const deleteVideoForModule = async (courseId: string, moduleId: string, l
   return { message: 'Video deleted' }
 }
 
-export const getMaterials = async (_moduleId: string) => {
-  return []
+// Course materials (real: course_service, scoped course → module → optional video)
+
+function mapAdminMaterial(m: any): any {
+  return {
+    id: String(m.id),
+    module_id: String(m.module_id),
+    video_id: m.lesson_id != null ? String(m.lesson_id) : null,
+    title: m.title,
+    file_url: m.file_url,
+    file_type: m.file_type,
+    file_public_id: m.file_public_id ?? null,
+    order_number: m.order ?? 0,
+    created_at: m.created_at,
+  }
 }
 
-export const createMaterial = async (_data: MaterialCreateData): Promise<any> => {
-  throw new Error('Lesson materials are not a separate entity in Edura — see cloudinary_asset_url on a lesson.')
+export const getMaterials = async (courseId: string, moduleId: string) => {
+  const response = await apiClient.get(`/api/courses/${courseId}/modules/${moduleId}/materials`)
+  return response.data.map(mapAdminMaterial)
 }
 
-export const updateMaterial = async (_id: string, _data: MaterialUpdateData): Promise<any> => {
-  throw new Error('Lesson materials are not supported by the Edura backend.')
+export const createMaterial = async (courseId: string, data: MaterialCreateData): Promise<any> => {
+  const response = await apiClient.post(`/api/courses/${courseId}/modules/${data.module_id}/materials`, {
+    lesson_id: data.video_id ? Number(data.video_id) : null,
+    title: data.title,
+    file_url: data.file_url,
+    file_type: data.file_type,
+    file_public_id: data.file_public_id ?? null,
+    order: data.order_number,
+  })
+  return mapAdminMaterial(response.data)
 }
 
-export const deleteMaterial = async (_id: string): Promise<any> => {
-  throw new Error('Lesson materials are not supported by the Edura backend.')
+export const updateMaterial = async (
+  courseId: string,
+  moduleId: string,
+  id: string,
+  data: MaterialUpdateData
+): Promise<any> => {
+  const body: Record<string, unknown> = {
+    title: data.title,
+    file_url: data.file_url,
+    file_type: data.file_type,
+    file_public_id: data.file_public_id,
+    order: data.order_number,
+  }
+  if (data.video_id !== undefined) body.lesson_id = data.video_id ? Number(data.video_id) : null
+  const response = await apiClient.put(`/api/courses/${courseId}/modules/${moduleId}/materials/${id}`, body)
+  return mapAdminMaterial(response.data)
+}
+
+export const deleteMaterial = async (courseId: string, moduleId: string, id: string): Promise<any> => {
+  await apiClient.delete(`/api/courses/${courseId}/modules/${moduleId}/materials/${id}`)
+  return { message: 'Material deleted' }
 }
 
 // In-Video Checkpoints — no such concept exists in Edura.
 
-export const importVideoCheckpointsCSV = async (_videoId: string, _file: File): Promise<any> => {
-  throw new Error('Video checkpoints are not supported by the Edura backend.')
+// In-video quiz checkpoints (course_service), scoped course -> lesson -> video.
+const checkpointsPath = (courseId: string, moduleId: string, videoId: string) =>
+  `/api/courses/${courseId}/modules/${moduleId}/lessons/${videoId}/checkpoints`
+
+export const importVideoCheckpointsCSV = async (
+  courseId: string,
+  moduleId: string,
+  videoId: string,
+  file: File
+): Promise<{ message: string; questions_created: number; errors: string[] }> => {
+  const formData = new FormData()
+  formData.append('file', file)
+  const response = await apiClient.post(`${checkpointsPath(courseId, moduleId, videoId)}/import-csv`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+  return response.data
 }
 
-export const downloadCheckpointCSVTemplate = () => {
-  return ''
+// The template needs the admin's token, so it is fetched and saved as a blob.
+export const downloadCheckpointCSVTemplate = async (): Promise<void> => {
+  const response = await apiClient.get('/api/courses/checkpoints/csv-template', { responseType: 'blob' })
+  const url = URL.createObjectURL(new Blob([response.data], { type: 'text/csv' }))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = 'video_checkpoints_template.csv'
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
 }
 
-export const getVideoCheckpoints = async (_videoId: string) => {
-  return []
+export const getVideoCheckpoints = async (courseId: string, moduleId: string, videoId: string) => {
+  const response = await apiClient.get(checkpointsPath(courseId, moduleId, videoId))
+  return response.data
 }
 
-export const deleteVideoCheckpoint = async (_checkpointId: string): Promise<any> => {
-  throw new Error('Video checkpoints are not supported by the Edura backend.')
+export const deleteVideoCheckpoint = async (checkpointId: string): Promise<any> => {
+  await apiClient.delete(`/api/courses/checkpoints/${checkpointId}`)
+  return { message: 'Checkpoint deleted' }
 }
 
-export const clearVideoCheckpoints = async (_videoId: string): Promise<any> => {
-  throw new Error('Video checkpoints are not supported by the Edura backend.')
+export const clearVideoCheckpoints = async (courseId: string, moduleId: string, videoId: string): Promise<any> => {
+  await apiClient.delete(checkpointsPath(courseId, moduleId, videoId))
+  return { message: 'Checkpoints cleared' }
 }
 
-export const updateVideoCheckpoint = async (_checkpointId: string, _data: { timestamp_seconds: number }): Promise<any> => {
-  throw new Error('Video checkpoints are not supported by the Edura backend.')
+export const updateVideoCheckpoint = async (checkpointId: string, data: { timestamp_seconds: number }): Promise<any> => {
+  const response = await apiClient.patch(`/api/courses/checkpoints/${checkpointId}`, data)
+  return response.data
 }
 
-export const updateCheckpointQuestion = async (_questionId: string, _data: any): Promise<any> => {
-  throw new Error('Video checkpoints are not supported by the Edura backend.')
+export const updateCheckpointQuestion = async (questionId: string, data: any): Promise<any> => {
+  const response = await apiClient.patch(`/api/courses/checkpoint-questions/${questionId}`, data)
+  return response.data
 }
 
 // Exam / Course / Sub-Course / Video Module Access Management — enrollment_service
@@ -1085,53 +1273,58 @@ export const revokeExamAccess = async (_examId: string, _userId: string): Promis
   throw new Error('Manually revoking exam access is not supported by the Edura backend.')
 }
 
-export const getEligibleStudentsForCourse = async (_courseId: string, _search?: string): Promise<EligibleStudent[]> => {
-  return []
+// Course- and lesson-level access live in enrollment_service. A lesson is a
+// course_service module — the same id whether it holds exams or videos.
+const accessParams = (courseId: string, moduleId?: string) =>
+  moduleId ? { course_id: Number(courseId), module_id: Number(moduleId) } : { course_id: Number(courseId) }
+
+const getEligible = async (courseId: string, moduleId?: string, search?: string): Promise<EligibleStudent[]> => {
+  const response = await apiClient.get('/api/enrollments/admin/eligible', {
+    params: { ...accessParams(courseId, moduleId), search: search || undefined },
+  })
+  return response.data
 }
 
-export const getEnrolledStudentsForCourse = async (_courseId: string): Promise<EnrolledStudent[]> => {
-  return []
+const getEnrolled = async (courseId: string, moduleId?: string): Promise<EnrolledStudent[]> => {
+  const response = await apiClient.get('/api/enrollments/admin/enrolled', { params: accessParams(courseId, moduleId) })
+  return response.data
 }
 
-export const grantCourseAccess = async (_courseId: string, _userIds: string[]): Promise<{ message: string }> => {
-  throw new Error('Manually granting course access is not supported by the Edura backend.')
+const grantAccess = async (courseId: string, moduleId: string | undefined, userIds: string[]) => {
+  const response = await apiClient.post('/api/enrollments/admin/grant', {
+    ...accessParams(courseId, moduleId),
+    user_ids: userIds.map(Number),
+  })
+  return { message: response.data.message as string }
 }
 
-export const revokeCourseAccess = async (_courseId: string, _userId: string): Promise<{ message: string }> => {
-  throw new Error('Manually revoking course access is not supported by the Edura backend.')
+const revokeAccess = async (courseId: string, moduleId: string | undefined, userId: string) => {
+  const response = await apiClient.delete('/api/enrollments/admin/revoke', {
+    params: { ...accessParams(courseId, moduleId), user_id: Number(userId) },
+  })
+  return { message: response.data.message as string }
 }
 
-export const getEligibleStudentsForSubCourse = async (_subCourseId: string, _search?: string): Promise<EligibleStudent[]> => {
-  return []
-}
+export const getEligibleStudentsForCourse = (courseId: string, search?: string) => getEligible(courseId, undefined, search)
+export const getEnrolledStudentsForCourse = (courseId: string) => getEnrolled(courseId)
+export const grantCourseAccess = (courseId: string, userIds: string[]) => grantAccess(courseId, undefined, userIds)
+export const revokeCourseAccess = (courseId: string, userId: string) => revokeAccess(courseId, undefined, userId)
 
-export const getEnrolledStudentsForSubCourse = async (_subCourseId: string): Promise<EnrolledStudent[]> => {
-  return []
-}
+export const getEligibleStudentsForSubCourse = (courseId: string, subCourseId: string, search?: string) =>
+  getEligible(courseId, subCourseId, search)
+export const getEnrolledStudentsForSubCourse = (courseId: string, subCourseId: string) => getEnrolled(courseId, subCourseId)
+export const grantSubCourseAccess = (courseId: string, subCourseId: string, userIds: string[]) =>
+  grantAccess(courseId, subCourseId, userIds)
+export const revokeSubCourseAccess = (courseId: string, subCourseId: string, userId: string) =>
+  revokeAccess(courseId, subCourseId, userId)
 
-export const grantSubCourseAccess = async (_subCourseId: string, _userIds: string[]): Promise<{ message: string }> => {
-  throw new Error('Sub-courses are not supported by the Edura backend.')
-}
-
-export const revokeSubCourseAccess = async (_subCourseId: string, _userId: string): Promise<{ message: string }> => {
-  throw new Error('Sub-courses are not supported by the Edura backend.')
-}
-
-export const getEligibleStudentsForVideoModule = async (_moduleId: string, _search?: string): Promise<EligibleStudent[]> => {
-  return []
-}
-
-export const getEnrolledStudentsForVideoModule = async (_moduleId: string): Promise<EnrolledStudent[]> => {
-  return []
-}
-
-export const grantVideoModuleAccess = async (_moduleId: string, _userIds: string[]): Promise<{ message: string }> => {
-  throw new Error('Manually granting module access is not supported by the Edura backend.')
-}
-
-export const revokeVideoModuleAccess = async (_moduleId: string, _userId: string): Promise<{ message: string }> => {
-  throw new Error('Manually revoking module access is not supported by the Edura backend.')
-}
+export const getEligibleStudentsForVideoModule = (courseId: string, moduleId: string, search?: string) =>
+  getEligible(courseId, moduleId, search)
+export const getEnrolledStudentsForVideoModule = (courseId: string, moduleId: string) => getEnrolled(courseId, moduleId)
+export const grantVideoModuleAccess = (courseId: string, moduleId: string, userIds: string[]) =>
+  grantAccess(courseId, moduleId, userIds)
+export const revokeVideoModuleAccess = (courseId: string, moduleId: string, userId: string) =>
+  revokeAccess(courseId, moduleId, userId)
 
 // ── Admin Management (real: auth_service + user_service) ────────────────────
 // Edura's role model has no separate super_admin tier — every admin account
@@ -1204,8 +1397,11 @@ export const getModulesForCourse = async (courseId: string): Promise<any[]> => {
   return getModules(courseId)
 }
 
-export const getMaterialsForVideo = async (_videoId: string): Promise<any[]> => {
-  return []
+export const getMaterialsForVideo = async (courseId: string, moduleId: string, videoId: string): Promise<any[]> => {
+  const response = await apiClient.get(`/api/courses/${courseId}/modules/${moduleId}/materials`, {
+    params: { lesson_id: videoId },
+  })
+  return response.data.map(mapAdminMaterial)
 }
 
 // ── Class Packages — no such concept exists in Edura. ────────────────────
@@ -1254,34 +1450,53 @@ export interface ClassEnrollment {
   expires_at: string | null
 }
 
-export const getClassPackages = async (_params?: { grade?: number; stream_id?: string; is_active?: boolean }): Promise<ClassPackage[]> => {
-  return []
+// Class packages (enrollment_service) — grade bundles that unlock every course they cover.
+const toNumberIds = (params?: Record<string, any>) =>
+  Object.fromEntries(Object.entries(params ?? {}).filter(([, v]) => v !== undefined && v !== ''))
+
+export const getClassPackages = async (params?: { grade?: number; stream_id?: string; is_active?: boolean }): Promise<ClassPackage[]> => {
+  const response = await apiClient.get('/api/enrollments/admin/class-packages', { params: toNumberIds(params) })
+  return response.data
 }
 
-export const createClassPackage = async (_data: ClassPackageCreateData): Promise<ClassPackage> => {
-  throw new Error('Class packages are not supported by the Edura backend.')
+const packageBody = (data: ClassPackageCreateData | ClassPackageUpdateData) => ({
+  ...data,
+  stream_id: data.stream_id ? Number(data.stream_id) : data.stream_id === undefined ? undefined : null,
+})
+
+export const createClassPackage = async (data: ClassPackageCreateData): Promise<ClassPackage> => {
+  const response = await apiClient.post('/api/enrollments/admin/class-packages', packageBody(data))
+  return response.data
 }
 
-export const updateClassPackage = async (_id: string, _data: ClassPackageUpdateData): Promise<ClassPackage> => {
-  throw new Error('Class packages are not supported by the Edura backend.')
+export const updateClassPackage = async (id: string, data: ClassPackageUpdateData): Promise<ClassPackage> => {
+  const response = await apiClient.patch(`/api/enrollments/admin/class-packages/${id}`, packageBody(data))
+  return response.data
 }
 
-export const deleteClassPackage = async (_id: string): Promise<void> => {
-  throw new Error('Class packages are not supported by the Edura backend.')
+export const deleteClassPackage = async (id: string): Promise<void> => {
+  await apiClient.delete(`/api/enrollments/admin/class-packages/${id}`)
 }
 
 export const autoGenerateClassPackages = async (): Promise<{ created: string[]; count: number }> => {
-  return { created: [], count: 0 }
+  const response = await apiClient.post('/api/enrollments/admin/class-packages/auto-generate')
+  return response.data
 }
 
-export const getClassEnrollments = async (_params?: { user_id?: string; class_package_id?: string }): Promise<ClassEnrollment[]> => {
-  return []
+export const getClassEnrollments = async (params?: { user_id?: string; class_package_id?: string }): Promise<ClassEnrollment[]> => {
+  const response = await apiClient.get('/api/enrollments/admin/class-enrollments', { params: toNumberIds(params) })
+  return response.data
 }
 
-export const adminGrantClassEnrollment = async (_data: { user_id: string; class_package_id: string; expires_at?: string }): Promise<any> => {
-  throw new Error('Class packages are not supported by the Edura backend.')
+export const adminGrantClassEnrollment = async (data: { user_id: string; class_package_id: string; expires_at?: string }): Promise<any> => {
+  const response = await apiClient.post('/api/enrollments/admin/class-enrollments', {
+    user_id: Number(data.user_id),
+    class_package_id: Number(data.class_package_id),
+    expires_at: data.expires_at || undefined,
+  })
+  return response.data
 }
 
-export const adminRevokeClassEnrollment = async (_enrollmentId: string): Promise<void> => {
-  throw new Error('Class packages are not supported by the Edura backend.')
+export const adminRevokeClassEnrollment = async (enrollmentId: string): Promise<void> => {
+  await apiClient.delete(`/api/enrollments/admin/class-enrollments/${enrollmentId}`)
 }

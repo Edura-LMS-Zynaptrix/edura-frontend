@@ -12,11 +12,13 @@ import {
 interface EnrollmentAccessModalProps {
   type: 'exam' | 'course' | 'sub_course' | 'module'
   id: string
+  // The parent course — required for the lesson types (sub_course / module).
+  courseId?: string
   title: string
   onClose: () => void
 }
 
-export default function EnrollmentAccessModal({ type, id, title, onClose }: EnrollmentAccessModalProps) {
+export default function EnrollmentAccessModal({ type, id, courseId = '', title, onClose }: EnrollmentAccessModalProps) {
   const dispatch = useAppDispatch()
   const { enrolledStudents: enrolled, eligibleStudents: eligible, accessLoading: loading, accessError: error } = useAppSelector(state => state.exams)
   
@@ -34,11 +36,11 @@ export default function EnrollmentAccessModal({ type, id, title, onClose }: Enro
       dispatch(fetchCourseEnrolledStudents(id))
       dispatch(fetchCourseEligibleStudents({ courseId: id }))
     } else if (type === 'sub_course') {
-      dispatch(fetchSubCourseEnrolledStudents(id))
-      dispatch(fetchSubCourseEligibleStudents({ subCourseId: id }))
+      dispatch(fetchSubCourseEnrolledStudents({ courseId, subCourseId: id }))
+      dispatch(fetchSubCourseEligibleStudents({ courseId, subCourseId: id }))
     } else {
-      dispatch(fetchVideoModuleEnrolledStudents(id))
-      dispatch(fetchVideoModuleEligibleStudents({ moduleId: id }))
+      dispatch(fetchVideoModuleEnrolledStudents({ courseId, moduleId: id }))
+      dispatch(fetchVideoModuleEligibleStudents({ courseId, moduleId: id }))
     }
   }
 
@@ -55,9 +57,9 @@ export default function EnrollmentAccessModal({ type, id, title, onClose }: Enro
       } else if (type === 'course') {
         await dispatch(grantCourseAccessAction({ courseId: id, userIds: selectedEligible })).unwrap()
       } else if (type === 'sub_course') {
-        await dispatch(grantSubCourseAccessAction({ subCourseId: id, userIds: selectedEligible })).unwrap()
+        await dispatch(grantSubCourseAccessAction({ courseId, subCourseId: id, userIds: selectedEligible })).unwrap()
       } else {
-        await dispatch(grantVideoModuleAccessAction({ moduleId: id, userIds: selectedEligible })).unwrap()
+        await dispatch(grantVideoModuleAccessAction({ courseId, moduleId: id, userIds: selectedEligible })).unwrap()
       }
       setSelectedEligible([])
       await fetchData()
@@ -75,9 +77,9 @@ export default function EnrollmentAccessModal({ type, id, title, onClose }: Enro
       } else if (type === 'course') {
         await dispatch(revokeCourseAccessAction({ courseId: id, userId })).unwrap()
       } else if (type === 'sub_course') {
-        await dispatch(revokeSubCourseAccessAction({ subCourseId: id, userId })).unwrap()
+        await dispatch(revokeSubCourseAccessAction({ courseId, subCourseId: id, userId })).unwrap()
       } else {
-        await dispatch(revokeVideoModuleAccessAction({ moduleId: id, userId })).unwrap()
+        await dispatch(revokeVideoModuleAccessAction({ courseId, moduleId: id, userId })).unwrap()
       }
     } finally {
       setActionLoadingId(null)
@@ -94,7 +96,7 @@ export default function EnrollmentAccessModal({ type, id, title, onClose }: Enro
     s.full_name.toLowerCase().includes(search.toLowerCase())
   )
 
-  const typeLabel = type === 'exam' ? 'Exam' : type === 'course' ? 'Course' : 'Module'
+  const typeLabel = type === 'exam' ? 'Exam' : type === 'course' ? 'Course' : 'Lesson'
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">

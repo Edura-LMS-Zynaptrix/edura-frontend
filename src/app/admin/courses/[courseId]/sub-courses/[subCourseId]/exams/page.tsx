@@ -23,6 +23,13 @@ type Course = {
   sub_courses?: { id: string, title: string }[]
 }
 
+// datetime-local inputs take local wall-clock time, not UTC.
+function toLocalInputValue(iso: string): string {
+  const d = new Date(iso)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
 type Exam = {
   id: string
   course_id: string
@@ -75,7 +82,6 @@ export default function CourseExamsPage() {
     description: '',
     duration_hours: '',
     duration_minutes: '',
-    total_questions: '',
     order_number: '0',
     scheduled_start: '',
   })
@@ -136,15 +142,13 @@ export default function CourseExamsPage() {
     }
   }, [isInitialized, isAuthenticated, user, dispatch, router, courseId, courses.length, pathname, isLoading, searchParams])
 
-  const validateExamForm = (): { title: string; totalDurationMinutes: number; totalQuestions: number; orderNumber: number; finalDescription: string | null } | null => {
+  const validateExamForm = (): { title: string; totalDurationMinutes: number; orderNumber: number; finalDescription: string | null } | null => {
     const title = examForm.title ? examForm.title.trim() : ''
     if (!title) { setLocalError('Please enter exam title'); return null }
 
     if (!examForm.duration_hours && !examForm.duration_minutes) {
       setLocalError('Please enter exam duration (hours and/or minutes)'); return null
     }
-
-    if (!examForm.total_questions) { setLocalError('Please enter total questions'); return null }
 
     const hours = Number(examForm.duration_hours) || 0
     const minutes = Number(examForm.duration_minutes) || 0
@@ -155,16 +159,13 @@ export default function CourseExamsPage() {
       setLocalError('Duration must be between 1 minute and 8 hours'); return null
     }
 
-    const totalQuestions = Number(examForm.total_questions)
-    if (isNaN(totalQuestions) || totalQuestions < 0) { setLocalError('Please enter a valid number of questions'); return null }
-
     const orderNumber = Number(examForm.order_number) || 0
     if (isNaN(orderNumber)) { setLocalError('Please enter a valid order number'); return null }
 
     const description = examForm.description ? examForm.description.trim() : null
     const finalDescription = description && description.length > 0 ? description : null
 
-    return { title, totalDurationMinutes, totalQuestions, orderNumber, finalDescription }
+    return { title, totalDurationMinutes, orderNumber, finalDescription }
   }
 
   const handleCreateExam = async (e: FormEvent) => {
@@ -175,7 +176,7 @@ export default function CourseExamsPage() {
 
       const validated = validateExamForm()
       if (!validated) { setIsCreatingExam(false); return }
-      const { title, totalDurationMinutes, totalQuestions, orderNumber, finalDescription } = validated
+      const { title, totalDurationMinutes, orderNumber, finalDescription } = validated
 
       let imageUrl: string | null = null
       let imagePublicId: string | null = null
@@ -193,7 +194,7 @@ export default function CourseExamsPage() {
       }
 
       if (!courseId || !subCourseId) {
-        setLocalError('Course ID or SubCourse ID is missing')
+        setLocalError('Course ID or lesson ID is missing')
         setIsCreatingExam(false)
         return
       }
@@ -206,7 +207,6 @@ export default function CourseExamsPage() {
         image_public_id: imagePublicId,
         description: finalDescription,
         duration_minutes: totalDurationMinutes,
-        total_questions: Math.floor(totalQuestions),
         order_number: Math.floor(orderNumber),
         scheduled_start: examForm.scheduled_start ? new Date(examForm.scheduled_start).toISOString() : null,
       })).unwrap()
@@ -218,7 +218,6 @@ export default function CourseExamsPage() {
         description: '',
         duration_hours: '',
         duration_minutes: '',
-        total_questions: '',
         order_number: '0',
         scheduled_start: '',
       })
@@ -241,7 +240,6 @@ export default function CourseExamsPage() {
       description: '',
       duration_hours: '',
       duration_minutes: '',
-      total_questions: '',
       order_number: String(exams.length + 1),
       scheduled_start: '',
     })
@@ -291,9 +289,7 @@ export default function CourseExamsPage() {
     setLocalError('')
     const hours = Math.floor(exam.duration_minutes / 60)
     const minutes = exam.duration_minutes % 60
-    const scheduledLocal = exam.scheduled_start
-      ? new Date(exam.scheduled_start).toISOString().slice(0, 16)
-      : ''
+    const scheduledLocal = exam.scheduled_start ? toLocalInputValue(exam.scheduled_start) : ''
     setExamForm({
       title: exam.title,
       image_url: exam.image_url || '',
@@ -301,7 +297,6 @@ export default function CourseExamsPage() {
       description: exam.description || '',
       duration_hours: hours > 0 ? String(hours) : '',
       duration_minutes: minutes > 0 ? String(minutes) : '',
-      total_questions: String(exam.total_questions),
       order_number: String(exam.order_number || 0),
       scheduled_start: scheduledLocal,
     })
@@ -329,7 +324,7 @@ export default function CourseExamsPage() {
 
       const validated = validateExamForm()
       if (!validated) { setIsCreatingExam(false); return }
-      const { title, totalDurationMinutes, totalQuestions, orderNumber, finalDescription } = validated
+      const { title, totalDurationMinutes, orderNumber, finalDescription } = validated
 
       let imageUrl: string | null = null
       let imagePublicId: string | null = null
@@ -369,7 +364,6 @@ export default function CourseExamsPage() {
           image_public_id: imagePublicId,
           description: finalDescription,
           duration_minutes: totalDurationMinutes,
-          total_questions: Math.floor(totalQuestions),
           order_number: Math.floor(orderNumber),
           scheduled_start: examForm.scheduled_start ? new Date(examForm.scheduled_start).toISOString() : null,
         }
@@ -417,7 +411,7 @@ export default function CourseExamsPage() {
             )}
           </div>
           <Link href={`/admin/courses/${courseId}/sub-courses`} className="px-4 py-2 text-sm text-teal-700 hover:bg-teal-50 rounded-lg">
-            Back to Modules
+            Back to Lessons
           </Link>
         </div>
       </header>
@@ -450,7 +444,7 @@ export default function CourseExamsPage() {
             <p className="text-sm text-gray-500">Loading data...</p>
           ) : exams.length === 0 ? (
             <div className="text-center py-12">
-              <p className="text-gray-500 mb-4">No exams yet in this course</p>
+              <p className="text-gray-500 mb-4">No exams yet in this lesson</p>
               <button
                 onClick={openCreateModal}
                 className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-black"
@@ -596,17 +590,6 @@ export default function CourseExamsPage() {
                     <p className="text-xs text-gray-500 mt-1">Minutes</p>
                   </div>
                 </div>
-              </div>
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">Total Questions</label>
-                <input
-                  type="number"
-                  min={0}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                  placeholder="Enter total number of questions"
-                  value={examForm.total_questions}
-                  onChange={(e) => setExamForm((prev) => ({ ...prev, total_questions: e.target.value }))}
-                />
               </div>
 
               <div className="space-y-2">
@@ -762,17 +745,6 @@ export default function CourseExamsPage() {
                   </div>
                 </div>
               </div>
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">Total Questions</label>
-                <input
-                  type="number"
-                  min={0}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                  placeholder="Enter total number of questions"
-                  value={examForm.total_questions}
-                  onChange={(e) => setExamForm((prev) => ({ ...prev, total_questions: e.target.value }))}
-                />
-              </div>
 
               <div className="space-y-2">
                 <label className="block text-sm font-medium text-gray-700">Order Number</label>
@@ -869,7 +841,7 @@ export default function CourseExamsPage() {
                       ) : (
                         <div>
                           <p className="text-sm text-gray-600">Click to select a <strong>.zip</strong> file</p>
-                          <p className="text-xs text-gray-400 mt-1">Max 200 MB</p>
+                          <p className="text-xs text-gray-400 mt-1">Max 100 MB</p>
                         </div>
                       )}
                     </label>

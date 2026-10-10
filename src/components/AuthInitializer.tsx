@@ -2,9 +2,9 @@
 
 import { useEffect, useRef } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
+import { syncChatThunk, fetchChatHistoryThunk } from '@/lib/redux/slices/chatSlice'
 import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
 import { fetchCurrentUser, setCredentials, setAuthenticatedFromStorage, setInitialized } from '@/lib/redux/slices/authSlice'
-import { syncChatThunk, fetchChatHistoryThunk } from '@/lib/redux/slices/chatSlice'
 
 // Attempt a silent token refresh returning the new access token or null.
 // Edura's refresh token is an HttpOnly cookie (never exposed to JS), so the
@@ -88,15 +88,14 @@ export default function AuthInitializer() {
       // Fetch full user profile in the background (non-blocking for initial render)
       dispatch(fetchCurrentUser())
 
-      // Sync chat session if a guest session exists
+      // A chat started as a guest moves onto the account once signed in.
       const sessionId = localStorage.getItem('chat_session_id')
       if (sessionId) {
         try {
           await dispatch(syncChatThunk(sessionId)).unwrap()
-          // After successful sync, refetch history to show merged messages immediately
-          dispatch(fetchChatHistoryThunk()) 
+          dispatch(fetchChatHistoryThunk())
         } catch (err) {
-          console.error("Chat sync failed:", err)
+          console.warn('Chat sync failed:', err)
         }
       }
     }

@@ -261,9 +261,9 @@ export const revokeCourseAccessAction = createAsyncThunk(
 // Sub-Course Access Management Thunks
 export const fetchSubCourseEnrolledStudents = createAsyncThunk(
   'exams/fetchSubCourseEnrolledStudents',
-  async (subCourseId: string, { rejectWithValue }) => {
+  async ({ courseId, subCourseId }: { courseId: string; subCourseId: string }, { rejectWithValue }) => {
     try {
-      return await adminApi.getEnrolledStudentsForSubCourse(subCourseId)
+      return await adminApi.getEnrolledStudentsForSubCourse(courseId, subCourseId)
     } catch (error: any) {
       return rejectWithValue(getErrorMessage(error))
     }
@@ -272,9 +272,9 @@ export const fetchSubCourseEnrolledStudents = createAsyncThunk(
 
 export const fetchSubCourseEligibleStudents = createAsyncThunk(
   'exams/fetchSubCourseEligibleStudents',
-  async ({ subCourseId, search }: { subCourseId: string; search?: string }, { rejectWithValue }) => {
+  async ({ courseId, subCourseId, search }: { courseId: string; subCourseId: string; search?: string }, { rejectWithValue }) => {
     try {
-      return await adminApi.getEligibleStudentsForSubCourse(subCourseId, search)
+      return await adminApi.getEligibleStudentsForSubCourse(courseId, subCourseId, search)
     } catch (error: any) {
       return rejectWithValue(getErrorMessage(error))
     }
@@ -283,9 +283,9 @@ export const fetchSubCourseEligibleStudents = createAsyncThunk(
 
 export const grantSubCourseAccessAction = createAsyncThunk(
   'exams/grantSubCourseAccess',
-  async ({ subCourseId, userIds }: { subCourseId: string; userIds: string[] }, { rejectWithValue }) => {
+  async ({ courseId, subCourseId, userIds }: { courseId: string; subCourseId: string; userIds: string[] }, { rejectWithValue }) => {
     try {
-      await adminApi.grantSubCourseAccess(subCourseId, userIds)
+      await adminApi.grantSubCourseAccess(courseId, subCourseId, userIds)
       return { subCourseId, userIds }
     } catch (error: any) {
       return rejectWithValue(getErrorMessage(error))
@@ -295,9 +295,9 @@ export const grantSubCourseAccessAction = createAsyncThunk(
 
 export const revokeSubCourseAccessAction = createAsyncThunk(
   'exams/revokeSubCourseAccess',
-  async ({ subCourseId, userId }: { subCourseId: string; userId: string }, { rejectWithValue }) => {
+  async ({ courseId, subCourseId, userId }: { courseId: string; subCourseId: string; userId: string }, { rejectWithValue }) => {
     try {
-      await adminApi.revokeSubCourseAccess(subCourseId, userId)
+      await adminApi.revokeSubCourseAccess(courseId, subCourseId, userId)
       return userId
     } catch (error: any) {
       return rejectWithValue(getErrorMessage(error))
@@ -308,9 +308,9 @@ export const revokeSubCourseAccessAction = createAsyncThunk(
 // Video Module Access Management Thunks
 export const fetchVideoModuleEnrolledStudents = createAsyncThunk(
   'exams/fetchVideoModuleEnrolledStudents',
-  async (moduleId: string, { rejectWithValue }) => {
+  async ({ courseId, moduleId }: { courseId: string; moduleId: string }, { rejectWithValue }) => {
     try {
-      return await adminApi.getEnrolledStudentsForVideoModule(moduleId)
+      return await adminApi.getEnrolledStudentsForVideoModule(courseId, moduleId)
     } catch (error: any) {
       return rejectWithValue(getErrorMessage(error))
     }
@@ -319,9 +319,9 @@ export const fetchVideoModuleEnrolledStudents = createAsyncThunk(
 
 export const fetchVideoModuleEligibleStudents = createAsyncThunk(
   'exams/fetchVideoModuleEligibleStudents',
-  async ({ moduleId, search }: { moduleId: string; search?: string }, { rejectWithValue }) => {
+  async ({ courseId, moduleId, search }: { courseId: string; moduleId: string; search?: string }, { rejectWithValue }) => {
     try {
-      return await adminApi.getEligibleStudentsForVideoModule(moduleId, search)
+      return await adminApi.getEligibleStudentsForVideoModule(courseId, moduleId, search)
     } catch (error: any) {
       return rejectWithValue(getErrorMessage(error))
     }
@@ -330,9 +330,9 @@ export const fetchVideoModuleEligibleStudents = createAsyncThunk(
 
 export const grantVideoModuleAccessAction = createAsyncThunk(
   'exams/grantVideoModuleAccess',
-  async ({ moduleId, userIds }: { moduleId: string; userIds: string[] }, { rejectWithValue }) => {
+  async ({ courseId, moduleId, userIds }: { courseId: string; moduleId: string; userIds: string[] }, { rejectWithValue }) => {
     try {
-      await adminApi.grantVideoModuleAccess(moduleId, userIds)
+      await adminApi.grantVideoModuleAccess(courseId, moduleId, userIds)
       return { moduleId, userIds }
     } catch (error: any) {
       return rejectWithValue(getErrorMessage(error))
@@ -342,9 +342,9 @@ export const grantVideoModuleAccessAction = createAsyncThunk(
 
 export const revokeVideoModuleAccessAction = createAsyncThunk(
   'exams/revokeVideoModuleAccess',
-  async ({ moduleId, userId }: { moduleId: string; userId: string }, { rejectWithValue }) => {
+  async ({ courseId, moduleId, userId }: { courseId: string; moduleId: string; userId: string }, { rejectWithValue }) => {
     try {
-      await adminApi.revokeVideoModuleAccess(moduleId, userId)
+      await adminApi.revokeVideoModuleAccess(courseId, moduleId, userId)
       return userId
     } catch (error: any) {
       return rejectWithValue(getErrorMessage(error))

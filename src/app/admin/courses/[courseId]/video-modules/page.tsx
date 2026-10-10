@@ -36,7 +36,7 @@ export default function CourseVideoModulesPage() {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [selectedForAccess, setSelectedForAccess] = useState<{ id: string, title: string } | null>(null)
+  const [selectedForAccess, setSelectedForAccess] = useState<{ id: string; title: string } | null>(null)
 
   const [formConfig, setFormConfig] = useState({
     title: '',
@@ -86,8 +86,8 @@ export default function CourseVideoModulesPage() {
   }
 
   const pageTitle = useMemo(() => {
-    if (!course) return 'Manage Video Modules'
-    return `Manage Video Modules • ${course.title}`
+    if (!course) return 'Manage Lessons'
+    return `Manage Lessons • ${course.title}`
   }, [course])
 
   useEffect(() => {
@@ -168,7 +168,7 @@ export default function CourseVideoModulesPage() {
       closeCreateModal()
       fetchModules()
     } catch (err: any) {
-      setLocalError(getErrorMessage(err) || 'Failed to create module')
+      setLocalError(getErrorMessage(err) || 'Failed to create lesson')
     } finally {
       setIsProcessing(false)
     }
@@ -258,28 +258,33 @@ export default function CourseVideoModulesPage() {
 
       await adminApi.updateModuleForCourse(courseId, editingId, {
         title: title,
+        description: finalDescription,
         order_number: orderNumber,
+        is_active: formConfig.is_active,
+        image_url: imageUrl,
+        image_public_id: imagePublicId,
       })
 
       closeEditModal()
       fetchModules()
     } catch (err: any) {
-      setLocalError(getErrorMessage(err) || 'Failed to update module')
+      setLocalError(getErrorMessage(err) || 'Failed to update lesson')
     } finally {
       setIsProcessing(false)
     }
   }
 
   const handleDelete = async (item: any) => {
-    const confirmed = window.confirm(`Delete video module "${item.title}"? All videos and materials inside will also be deleted.`)
+    const confirmed = window.confirm(`Delete lesson "${item.title}"? All videos and materials inside will also be deleted.`)
     if (!confirmed) return
 
     try {
       setLocalError('')
+      if (item.image_public_id) await deleteImageFromCloudinary(item.image_public_id)
       await adminApi.deleteModuleForCourse(courseId, item.id)
       fetchModules()
     } catch (err: any) {
-      setLocalError(getErrorMessage(err) || 'Failed to delete module')
+      setLocalError(getErrorMessage(err) || 'Failed to delete lesson')
     }
   }
 
@@ -298,7 +303,7 @@ export default function CourseVideoModulesPage() {
           <div>
             <h1 className="text-xl font-bold text-gray-900 font-outfit">{pageTitle}</h1>
             {course && (
-              <p className="text-xs text-gray-500">Grade {course.grade} • {course.subject} • Video Class</p>
+              <p className="text-xs text-gray-500">Grade {course.grade} • {course.subject} • Video Course</p>
             )}
           </div>
           <Link href="/admin/courses" className="px-4 py-2 text-sm text-purple-700 hover:bg-purple-50 rounded-lg transition-colors">
@@ -313,12 +318,12 @@ export default function CourseVideoModulesPage() {
         )}
 
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900">Video Modules</h2>
+          <h2 className="text-lg font-semibold text-gray-900">Lessons</h2>
           <button
             onClick={openCreateModal}
             className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium shadow-sm transition-all"
           >
-            + Create Module
+            + Create Lesson
           </button>
         </div>
 
@@ -327,9 +332,9 @@ export default function CourseVideoModulesPage() {
             <p className="text-sm text-gray-500">Loading data...</p>
           ) : modules.length === 0 ? (
             <div className="text-center py-12">
-               <p className="text-gray-500 mb-4">No video modules yet in this course</p>
+               <p className="text-gray-500 mb-4">No lessons yet in this course</p>
                <button onClick={openCreateModal} className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
-                 Create your first Module
+                 Create your first Lesson
                </button>
             </div>
           ) : (
@@ -343,6 +348,7 @@ export default function CourseVideoModulesPage() {
                     <h3 className="font-semibold text-gray-900 text-sm line-clamp-2 mb-2 font-outfit">{item.title}</h3>
                     <div className="text-xs text-gray-600 mb-3 space-y-1">
                       <p>Order: {item.order_number}</p>
+                      <p>Videos: {item.video_count ?? 0}</p>
                       <p>Status: {item.is_active ? <span className="text-green-600">Active</span> : <span className="text-gray-400">Inactive</span>}</p>
                     </div>
                     {item.description && <p className="text-xs text-gray-600 mb-4 line-clamp-2">{item.description}</p>}
@@ -353,7 +359,7 @@ export default function CourseVideoModulesPage() {
                       >
                         Manage Videos & Materials
                       </Link>
-                      <button 
+                      <button
                         onClick={() => setSelectedForAccess({ id: item.id, title: item.title })}
                         className="block w-full px-3 py-2 text-xs rounded-md bg-amber-100 text-amber-700 hover:bg-amber-200 text-center font-bold uppercase tracking-wider transition-colors"
                       >
@@ -377,14 +383,14 @@ export default function CourseVideoModulesPage() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto font-outfit">
             <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-gray-900">Create Video Module</h2>
+              <h2 className="text-xl font-semibold text-gray-900">Create Lesson</h2>
               <button onClick={closeCreateModal} className="text-gray-500 hover:text-gray-700">✕</button>
             </div>
             <form onSubmit={handleCreate} className="p-6 space-y-4">
               {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">{error}</div>}
 
               <div className="space-y-1">
-                <label className="block text-sm font-medium text-gray-700">Module Title</label>
+                <label className="block text-sm font-medium text-gray-700">Lesson Title</label>
                 <input className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 outline-none" placeholder="e.g. Unit 01 - Introduction" value={formConfig.title} onChange={(e) => setFormConfig({...formConfig, title: e.target.value})} required />
               </div>
               
@@ -407,13 +413,13 @@ export default function CourseVideoModulesPage() {
               
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" checked={formConfig.is_active} onChange={(e) => setFormConfig({...formConfig, is_active: e.target.checked})} className="rounded text-purple-600 focus:ring-purple-500" />
-                <span className="text-sm text-gray-700">Module is active and visible</span>
+                <span className="text-sm text-gray-700">Lesson is active and visible</span>
               </label>
 
               <div className="flex gap-3 pt-4 border-t border-gray-200">
                 <button type="button" onClick={closeCreateModal} className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">Cancel</button>
                 <button type="submit" disabled={isProcessing} className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-all font-bold shadow-md">
-                  {isProcessing ? 'Creating...' : 'Create Module'}
+                  {isProcessing ? 'Creating...' : 'Create Lesson'}
                 </button>
               </div>
             </form>
@@ -426,15 +432,15 @@ export default function CourseVideoModulesPage() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto font-outfit">
             <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-gray-900">Edit Video Module</h2>
+              <h2 className="text-xl font-semibold text-gray-900">Edit Lesson</h2>
               <button onClick={closeEditModal} className="text-gray-500 hover:text-gray-700">✕</button>
             </div>
             <form onSubmit={handleEdit} className="p-6 space-y-4">
               {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">{error}</div>}
 
               <div className="space-y-1">
-                <label className="block text-sm font-medium text-gray-700">Module Title</label>
-                <input className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 outline-none" placeholder="Module Title" value={formConfig.title} onChange={(e) => setFormConfig({...formConfig, title: e.target.value})} required />
+                <label className="block text-sm font-medium text-gray-700">Lesson Title</label>
+                <input className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 outline-none" placeholder="Lesson Title" value={formConfig.title} onChange={(e) => setFormConfig({...formConfig, title: e.target.value})} required />
               </div>
 
               <div className="space-y-1">
@@ -470,24 +476,24 @@ export default function CourseVideoModulesPage() {
               
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" checked={formConfig.is_active} onChange={(e) => setFormConfig({...formConfig, is_active: e.target.checked})} className="rounded text-purple-600 focus:ring-purple-500" />
-                <span className="text-sm text-gray-700">Module is visible to students</span>
+                <span className="text-sm text-gray-700">Lesson is visible to students</span>
               </label>
 
               <div className="flex gap-3 pt-4 border-t border-gray-200">
                 <button type="button" onClick={closeEditModal} className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">Cancel</button>
                 <button type="submit" disabled={isProcessing} className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-all font-bold shadow-md">
-                  {isProcessing ? 'Updating...' : 'Update Module'}
+                  {isProcessing ? 'Updating...' : 'Update Lesson'}
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
-      {/* Access Management Modal */}
       {selectedForAccess && (
         <EnrollmentAccessModal
           type="module"
           id={selectedForAccess.id}
+          courseId={String(courseId)}
           title={selectedForAccess.title}
           onClose={() => setSelectedForAccess(null)}
         />

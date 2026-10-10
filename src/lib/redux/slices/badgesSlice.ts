@@ -36,7 +36,7 @@ const initialState: BadgesState = {
 
 export const fetchBadgeDashboard = createAsyncThunk('badges/fetchDashboard', async (_, { rejectWithValue }) => {
   try {
-    const response = await apiClient.get('/api/v1/badges/dashboard')
+    const response = await apiClient.get('/api/assessments/badges/dashboard')
     return response.data
   } catch (err: any) {
     return rejectWithValue(err.response?.data?.detail || 'Failed to fetch badges')
@@ -45,7 +45,7 @@ export const fetchBadgeDashboard = createAsyncThunk('badges/fetchDashboard', asy
 
 export const fetchMyBadges = createAsyncThunk('badges/fetchMy', async (_, { rejectWithValue }) => {
   try {
-    const response = await apiClient.get('/api/v1/badges/my')
+    const response = await apiClient.get('/api/assessments/badges/my')
     return response.data
   } catch (err: any) {
     return rejectWithValue(err.response?.data?.detail || 'Failed to fetch earned badges')

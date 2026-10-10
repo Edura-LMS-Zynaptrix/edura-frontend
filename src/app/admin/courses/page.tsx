@@ -8,6 +8,7 @@ import { fetchCurrentUser } from '@/lib/redux/slices/authSlice'
 import { fetchCourses, createCourse, updateCourse, deleteCourse, AdminCourse, uploadImageThunk } from '@/lib/redux/slices/coursesSlice'
 import { fetchStreams } from '@/lib/redux/slices/adminSlice'
 import { getErrorMessage } from '@/lib/utils'
+import EnrollmentAccessModal from '@/components/admin/EnrollmentAccessModal'
 
 export default function AdminCoursesPage() {
   const router = useRouter()
@@ -24,12 +25,14 @@ export default function AdminCoursesPage() {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [editingCourseId, setEditingCourseId] = useState<string | null>(null)
+  const [selectedForAccess, setSelectedForAccess] = useState<{ id: string; title: string } | null>(null)
   const [search, setSearch] = useState('')
 
   const [courseForm, setCourseForm] = useState({
     title: '',
     description: '',
     price: '0',
+    course_type: 'video' as 'video' | 'exam',
     grade: '',
     stream_ids: [] as string[],
     image_url: '',
@@ -62,7 +65,7 @@ export default function AdminCoursesPage() {
     }
   }, [isAuthenticated, isInitialized, user, dispatch, router, pathname, isLoading, searchParams])
 
-  const resetForm = () => setCourseForm({ title: '', description: '', price: '0', grade: '', stream_ids: [], image_url: '', image_public_id: '' })
+  const resetForm = () => setCourseForm({ title: '', description: '', price: '0', course_type: 'video', grade: '', stream_ids: [], image_url: '', image_public_id: '' })
 
   const toggleStream = (streamId: string) => {
     setCourseForm((prev) => ({
@@ -106,12 +109,18 @@ export default function AdminCoursesPage() {
     setCourseImageFile(null)
   }
 
+  const editingHasLessons = useMemo(
+    () => (courses.find((c) => c.id === editingCourseId)?.sub_courses?.length ?? 0) > 0,
+    [courses, editingCourseId]
+  )
+
   const openEditModal = (course: AdminCourse) => {
     setLocalError('')
     setCourseForm({
       title: course.title,
       description: course.description || '',
       price: String(course.price),
+      course_type: course.course_type === 'exam' ? 'exam' : 'video',
       grade: course.grade ? String(course.grade) : '',
       stream_ids: course.stream_ids || [],
       image_url: course.image_url || '',
@@ -153,7 +162,7 @@ export default function AdminCoursesPage() {
         title: validated.title,
         subject: '',
         grade: courseForm.grade ? Number(courseForm.grade) : 0,
-        course_type: 'video',
+        course_type: courseForm.course_type,
         price: validated.price,
         description: validated.description,
         image_url: imageUrl,
@@ -199,6 +208,7 @@ export default function AdminCoursesPage() {
         data: {
           title: validated.title,
           price: validated.price,
+          course_type: courseForm.course_type,
           grade: courseForm.grade ? Number(courseForm.grade) : undefined,
           description: validated.description,
           image_url: imageUrl,
@@ -324,6 +334,9 @@ export default function AdminCoursesPage() {
                         {course.is_active ? 'Published' : 'Draft'}
                       </span>
                     </div>
+                    <span className={`inline-block mb-2 px-2 py-0.5 rounded text-[10px] font-bold uppercase ${course.course_type === 'exam' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
+                      {course.course_type === 'exam' ? 'Exam Course' : 'Video Course'}
+                    </span>
                     {course.description && (
                       <p className="text-xs text-gray-600 mb-3 line-clamp-2">{course.description}</p>
                     )}
@@ -332,17 +345,17 @@ export default function AdminCoursesPage() {
                     </p>
                     <div className="space-y-2">
                       <Link
-                        href={`/admin/courses/${course.id}/video-modules`}
+                        href={`/admin/courses/${course.id}/${course.course_type === 'exam' ? 'sub-courses' : 'video-modules'}`}
                         className="block w-full text-center px-3 py-2 text-xs rounded-md font-medium bg-teal-100 text-teal-700 hover:bg-teal-200 transition-colors"
                       >
-                        Manage Modules & Lessons
+                        Manage Lessons ({course.sub_courses?.length ?? 0})
                       </Link>
-                      <Link
-                        href={`/admin/courses/${course.id}/exams`}
-                        className="block w-full text-center px-3 py-2 text-xs rounded-md font-medium bg-indigo-100 text-indigo-700 hover:bg-indigo-200 transition-colors"
+                      <button
+                        onClick={() => setSelectedForAccess({ id: course.id, title: course.title })}
+                        className="block w-full px-3 py-2 text-xs rounded-md bg-amber-100 text-amber-700 hover:bg-amber-200 text-center font-bold uppercase tracking-wider transition-colors"
                       >
-                        Manage Exams
-                      </Link>
+                        Manage Access
+                      </button>
                       <button
                         onClick={() => handleTogglePublish(course)}
                         className={`block w-full px-3 py-2 text-xs rounded-md font-bold uppercase tracking-wider transition-colors ${
@@ -412,6 +425,36 @@ export default function AdminCoursesPage() {
                   onChange={(e) => setCourseForm((prev) => ({ ...prev, price: e.target.value }))}
                   required
                 />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Course Type</label>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="course_type"
+                      checked={courseForm.course_type === 'video'}
+                      onChange={() => setCourseForm((prev) => ({ ...prev, course_type: 'video' }))}
+                      className="w-4 h-4 text-teal-600 focus:ring-teal-500"
+                    />
+                    <span className="text-sm text-gray-700">Video Course</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="course_type"
+                      checked={courseForm.course_type === 'exam'}
+                      onChange={() => setCourseForm((prev) => ({ ...prev, course_type: 'exam' }))}
+                      className="w-4 h-4 text-teal-600 focus:ring-teal-500"
+                    />
+                    <span className="text-sm text-gray-700">Exam Course</span>
+                  </label>
+                </div>
+                <p className="text-xs text-gray-400 mt-1">
+                  {courseForm.course_type === 'exam'
+                    ? 'Exam course: add lessons, then add exams (with questions) inside each lesson.'
+                    : 'Video course: add lessons, then add videos and course materials inside each lesson.'}
+                </p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Grade</label>
@@ -508,6 +551,38 @@ export default function AdminCoursesPage() {
                 />
               </div>
               <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Course Type</label>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="course_type_edit"
+                      disabled={editingHasLessons}
+                      checked={courseForm.course_type === 'video'}
+                      onChange={() => setCourseForm((prev) => ({ ...prev, course_type: 'video' }))}
+                      className="w-4 h-4 text-teal-600 focus:ring-teal-500"
+                    />
+                    <span className="text-sm text-gray-700">Video Course</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="course_type_edit"
+                      disabled={editingHasLessons}
+                      checked={courseForm.course_type === 'exam'}
+                      onChange={() => setCourseForm((prev) => ({ ...prev, course_type: 'exam' }))}
+                      className="w-4 h-4 text-teal-600 focus:ring-teal-500"
+                    />
+                    <span className="text-sm text-gray-700">Exam Course</span>
+                  </label>
+                </div>
+                <p className="text-xs text-gray-400 mt-1">
+                  {courseForm.course_type === 'exam'
+                    ? 'Exam course: add lessons, then add exams (with questions) inside each lesson.'
+                    : 'Video course: add lessons, then add videos and course materials inside each lesson.'}
+                </p>
+              </div>
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Grade</label>
                 <select
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-white"
@@ -551,6 +626,14 @@ export default function AdminCoursesPage() {
             </form>
           </div>
         </div>
+      )}
+      {selectedForAccess && (
+        <EnrollmentAccessModal
+          type="course"
+          id={selectedForAccess.id}
+          title={selectedForAccess.title}
+          onClose={() => setSelectedForAccess(null)}
+        />
       )}
     </div>
   )

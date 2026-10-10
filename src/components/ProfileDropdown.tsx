@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
 import { logout } from '@/lib/redux/slices/authSlice'
+import { logoutSession } from '@/lib/api/auth'
 import { fetchReferralSummary } from '@/lib/redux/slices/referralSlice'
 import { getInitials } from '@/lib/utils/initials'
 
@@ -36,6 +37,8 @@ export default function ProfileDropdown() {
   }, [dispatch, user?.role])
 
   const handleLogout = () => {
+    // Best-effort: local sign-out shouldn't wait on, or fail with, the server.
+    logoutSession().catch(() => {})
     dispatch(logout())
     setIsOpen(false)
     router.push('/')

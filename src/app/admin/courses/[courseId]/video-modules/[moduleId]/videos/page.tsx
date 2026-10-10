@@ -51,6 +51,7 @@ export default function ModuleContentPage() {
   
   const [module, setModule] = useState<any>(null)
   const [videos, setVideos] = useState<any[]>([])
+  const [lessonMaterials, setLessonMaterials] = useState<any[]>([])
   const [loadingContent, setLoadingContent] = useState(true)
   const [localError, setLocalError] = useState('')
   const [isProcessing, setIsProcessing] = useState(false)
@@ -117,17 +118,22 @@ export default function ModuleContentPage() {
       setLoadingContent(true)
       // getModule(id) has no backing endpoint — course_service only lists
       // modules per course, so find this one in that list instead.
-      const [modulesData, videosData] = await Promise.all([
+      const [modulesData, videosData, materialsData] = await Promise.all([
         adminApi.getModulesForCourse(courseId),
         adminApi.getVideosForModule(courseId, moduleId),
+        adminApi.getMaterials(courseId, moduleId),
       ])
       const moduleData = modulesData.find((m: any) => String(m.id) === String(moduleId)) ?? null
       setModule(moduleData)
 
-      // A lesson has a single cloudinary_asset_url in Edura (not a separate
-      // materials list) — getVideosForModule already derives a one-item
-      // materials array from it for display.
-      setVideos(videosData)
+      // One request for the whole lesson, then grouped per video.
+      setVideos(
+        videosData.map((video: any) => ({
+          ...video,
+          materials: materialsData.filter((m: any) => m.video_id === video.id),
+        }))
+      )
+      setLessonMaterials(materialsData.filter((m: any) => !m.video_id))
       setLocalError('')
     } catch (err: any) {
       setLocalError(getErrorMessage(err) || 'Failed to load content')
@@ -244,25 +250,41 @@ export default function ModuleContentPage() {
 
       let fileUrl = materialForm.file_url
       let filePublicId = materialForm.file_public_id
+      let fileType = materialForm.file_type
+      const previousPublicId = editingMaterial?.file_public_id || null
 
-      // Edura's Lesson has a single cloudinary_asset_url, not a separate
-      // materials list — uploading here replaces the lesson's one attachment.
-      if (materialFile) {
-        const uploadRes = await adminApi.uploadFile(materialFile)
-        fileUrl = uploadRes.file_url
-        filePublicId = uploadRes.file_public_id
-      }
-
-      if (!fileUrl) {
+      if (!fileUrl && !materialFile) {
         setLocalError('Please select a file')
         setIsProcessing(false)
         return
       }
 
-      await adminApi.updateVideoForModule(courseId, moduleId, materialTargetVideoId, {
-        cloudinary_asset_url: fileUrl,
-        cloudinary_public_id: filePublicId || null,
-      })
+      if (materialFile) {
+        const uploadRes = await adminApi.uploadFile(materialFile)
+        fileUrl = uploadRes.file_url
+        filePublicId = uploadRes.file_public_id
+        fileType = uploadRes.file_type
+      }
+
+      const data = {
+        module_id: moduleId,
+        video_id: materialTargetVideoId || null,
+        title: materialForm.title,
+        file_url: fileUrl,
+        file_type: fileType,
+        file_public_id: filePublicId || null,
+        order_number: Number(materialForm.order_number) || 0,
+      }
+
+      if (editingMaterial) {
+        await adminApi.updateMaterial(courseId, moduleId, editingMaterial.id, data)
+        // The replaced file is no longer referenced anywhere.
+        if (materialFile && previousPublicId && previousPublicId !== filePublicId) {
+          await adminApi.deleteImage(previousPublicId).catch(() => {})
+        }
+      } else {
+        await adminApi.createMaterial(courseId, data)
+      }
 
       setShowMaterialModal(false)
       loadData()
@@ -273,13 +295,13 @@ export default function ModuleContentPage() {
     }
   }
 
-  const handleDeleteMaterial = async (videoId: string) => {
-    if (!window.confirm('Delete this attachment?')) return
+  const handleDeleteMaterial = async (material: any) => {
+    if (!window.confirm(`Delete material "${material.title}"?`)) return
     try {
-      await adminApi.updateVideoForModule(courseId, moduleId, videoId, {
-        cloudinary_asset_url: null,
-        cloudinary_public_id: null,
-      })
+      await adminApi.deleteMaterial(courseId, moduleId, material.id)
+      if (material.file_public_id) {
+        await adminApi.deleteImage(material.file_public_id).catch(() => {})
+      }
       loadData()
     } catch (err: any) {
       alert(getErrorMessage(err) || 'Delete failed')
@@ -321,7 +343,7 @@ export default function ModuleContentPage() {
     if (!selectedVideoId) return
     try {
       setLoadingCheckpoints(true)
-      const data = await adminApi.getVideoCheckpoints(selectedVideoId)
+      const data = await adminApi.getVideoCheckpoints(courseId, moduleId, selectedVideoId)
       setExistingCheckpoints(data)
     } catch (err) {
       console.error('Failed to load checkpoints', err)
@@ -389,7 +411,10 @@ export default function ModuleContentPage() {
     try {
       setIsProcessing(true)
       setLocalError('')
-      await adminApi.importVideoCheckpointsCSV(selectedVideoId, checkpointFile)
+      const result = await adminApi.importVideoCheckpointsCSV(courseId, moduleId, selectedVideoId, checkpointFile)
+      if (result.errors?.length) {
+        setLocalError(`${result.message}. Skipped: ${result.errors.join('; ')}`)
+      }
       setCheckpointFile(null)
       loadCheckpoints()
       loadData()
@@ -419,7 +444,7 @@ export default function ModuleContentPage() {
     if (!window.confirm('Are you sure you want to delete ALL quizzes for this video? This cannot be undone.')) return
     try {
       setIsProcessing(true)
-      await adminApi.clearVideoCheckpoints(selectedVideoId)
+      await adminApi.clearVideoCheckpoints(courseId, moduleId, selectedVideoId)
       loadCheckpoints()
       loadData()
     } catch (err: any) {
@@ -442,17 +467,20 @@ export default function ModuleContentPage() {
       <header className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-bold text-gray-900">Manage Lessons & Materials</h1>
+            <h1 className="text-xl font-bold text-gray-900">Manage Videos & Materials</h1>
             {module && (
-              <p className="text-xs text-gray-500">Module: {module.title} • {course?.title}</p>
+              <p className="text-xs text-gray-500">Lesson: {module.title} • {course?.title}</p>
             )}
           </div>
           <div className="flex items-center gap-3">
+            <button onClick={() => openMaterialModal('')} className="px-4 py-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 transition-all font-medium text-sm">
+              + Add Lesson Material
+            </button>
             <button onClick={() => openVideoModal()} className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-all shadow-sm font-medium text-sm">
               + Add Video
             </button>
             <Link href={`/admin/courses/${courseId}/video-modules`} className="px-4 py-2 text-sm text-purple-700 hover:bg-purple-50 rounded-lg transition-colors font-medium">
-              Back to Modules
+              Back to Lessons
             </Link>
           </div>
         </div>
@@ -462,12 +490,34 @@ export default function ModuleContentPage() {
         
         {localError && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">{localError}</div>}
 
+        {lessonMaterials.length > 0 && (
+          <div className="bg-white border border-gray-200 rounded-xl px-4 py-3">
+            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+              Lesson Materials ({lessonMaterials.length})
+            </h4>
+            <div className="space-y-1.5">
+              {[...lessonMaterials].sort((a: any, b: any) => a.order_number - b.order_number).map((mat: any) => (
+                <div key={mat.id} className="flex items-center gap-3 bg-gray-50 rounded-lg px-3 py-2 border border-gray-200">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-gray-800 truncate">{mat.title}</p>
+                    <a href={mat.file_url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-indigo-600 hover:underline font-bold uppercase tracking-wider">Download</a>
+                  </div>
+                  <div className="flex gap-1">
+                    <button onClick={() => openMaterialModal('', mat)} className="px-2 py-1 text-xs text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg">Edit</button>
+                    <button onClick={() => handleDeleteMaterial(mat)} className="px-2 py-1 text-xs text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg">Delete</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {videos.length === 0 ? (
           <div className="bg-white border border-dashed border-gray-300 rounded-xl py-12 text-center text-gray-500">
             No videos added yet. Click "+ Add Video" to get started.
           </div>
         ) : (
-          videos.sort((a,b) => a.order_number - b.order_number).map((video) => (
+          [...videos].sort((a, b) => a.order_number - b.order_number).map((video) => (
             <div key={video.id} className="bg-white border border-gray-200 rounded-xl overflow-hidden hover:shadow-md transition-all">
               {/* Video header */}
               <div className="p-4 flex items-center gap-4">
@@ -527,7 +577,7 @@ export default function ModuleContentPage() {
 
                 {video.materials && video.materials.length > 0 ? (
                   <div className="space-y-1.5">
-                    {video.materials.sort((a: any, b: any) => a.order_number - b.order_number).map((mat: any) => (
+                    {[...video.materials].sort((a: any, b: any) => a.order_number - b.order_number).map((mat: any) => (
                       <div key={mat.id} className="flex items-center gap-3 bg-white rounded-lg px-3 py-2 border border-gray-200">
                         <div className="w-8 h-8 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center flex-shrink-0">
                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
@@ -540,7 +590,7 @@ export default function ModuleContentPage() {
                           <button onClick={() => openMaterialModal(video.id, mat)} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg">
                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                           </button>
-                          <button onClick={() => handleDeleteMaterial(video.id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg">
+                          <button onClick={() => handleDeleteMaterial(mat)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg">
                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                           </button>
                         </div>
@@ -641,11 +691,11 @@ export default function ModuleContentPage() {
                     <div className="flex text-sm text-gray-600">
                       <label htmlFor="file-upload" className="relative cursor-pointer bg-white rounded-md font-medium text-indigo-600 hover:text-indigo-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-indigo-500">
                         <span>Upload a file</span>
-                        <input id="file-upload" name="file-upload" type="file" className="sr-only" onChange={(e) => setMaterialFile(e.target.files?.[0] || null)} />
+                        <input id="file-upload" name="file-upload" type="file" accept=".pdf,.doc,.docx,.zip,.png,.jpg,.jpeg" className="sr-only" onChange={(e) => setMaterialFile(e.target.files?.[0] || null)} />
                       </label>
                       <p className="pl-1">or drag and drop</p>
                     </div>
-                    <p className="text-xs text-gray-500">PDF, DOC, ZIP up to 20MB</p>
+                    <p className="text-xs text-gray-500">PDF, DOC, DOCX, ZIP or image, up to 20MB</p>
                     {materialFile && <p className="text-xs text-indigo-600 font-bold mt-2">Selected: {materialFile.name}</p>}
                     {editingMaterial && !materialFile && <p className="text-[10px] text-gray-400 mt-2">Keep empty to use existing file</p>}
                   </div>
@@ -815,14 +865,14 @@ export default function ModuleContentPage() {
                   <p className="text-[11px] text-amber-700/80 leading-relaxed font-medium pr-8">
                     Quickly add multiple quizzes by uploading a CSV. Timestamps can be in seconds or <b>min:sec</b> format.
                   </p>
-                  <a 
-                    href={adminApi.downloadCheckpointCSVTemplate()} 
-                    target="_blank"
+                  <button
+                    type="button"
+                    onClick={() => adminApi.downloadCheckpointCSVTemplate().catch(() => setLocalError('Could not download the template'))}
                     className="inline-flex items-center gap-1.5 text-[10px] font-black text-amber-800 hover:text-amber-900 underline transition-colors uppercase tracking-widest"
                   >
                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-10l-4 4m0 0l-4-4m4 4V4" /></svg>
                     Get CSV Template
-                  </a>
+                  </button>
                 </div>
 
                 <div className="space-y-2">
