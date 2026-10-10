@@ -1,10 +1,10 @@
 /**
  * Student API - Course enrollment and exam access
  *
- * Edura's actual backend surface is much smaller than this file's original
- * (ExamBuddy) shape: no sub-courses, streams, class-packages, referrals, or
- * bulk "my enrollments/attempts" listings. Every export below is kept with
- * its original name/signature so pages and Redux slices compile unchanged;
+ * A course holds lessons (course_service modules): video courses keep videos
+ * and materials inside each lesson, exam courses keep exams. Edura has no
+ * class-packages or per-lesson enrollment — enrollment is per course. Every
+ * export below keeps its original name/signature so pages compile unchanged;
  * functions that map to a real Edura endpoint call it (with best-effort
  * field translation), and functions with no backing service return an empty
  * default or reject clearly — never a fabricated network call.
@@ -108,6 +108,7 @@ export interface CheckpointQuestion {
 export interface VideoMaterial {
   id: string
   module_id: string
+  video_id?: string | null
   title: string
   file_url: string
   file_type: string
@@ -336,9 +337,56 @@ function mapCourse(c: any): Course {
     description: c.description ?? null,
     price: Number(c.price ?? 0),
     is_active: c.status === 'PUBLISHED',
-    course_type: 'video',
+    course_type: c.course_type === 'exam' ? 'exam' : 'video',
     stream_ids: (c.stream_ids ?? []).map(String),
     modules: [],
+  }
+}
+
+function mapMaterial(m: any): VideoMaterial {
+  return {
+    id: String(m.id),
+    module_id: String(m.module_id),
+    video_id: m.lesson_id != null ? String(m.lesson_id) : null,
+    title: m.title,
+    file_url: m.file_url,
+    file_type: m.file_type,
+    file_public_id: m.file_public_id ?? null,
+    order_number: m.order ?? 0,
+  }
+}
+
+// Students need an ACTIVE enrollment; teachers/admins preview everything.
+interface CourseAccess {
+  course: boolean // the whole course (enrolled, or an admin grant)
+  lessons: Set<string> // single lessons an admin granted on their own
+}
+
+const unlocks = (access: CourseAccess, lessonId: string | number | null | undefined) =>
+  access.course || (lessonId != null && access.lessons.has(String(lessonId)))
+
+// Students need an ACTIVE enrollment (or a lesson grant); teachers/admins preview everything.
+async function getCourseAccess(courseId: string): Promise<CourseAccess> {
+  const decoded = getDecodedToken()
+  if (!decoded) return { course: false, lessons: new Set() }
+  if (decoded.role !== 'student') return { course: true, lessons: new Set() }
+  try {
+    // Server-side answer: course enrollment, a covering class package, or single-lesson grants.
+    const res = await apiClient.get('/api/enrollments/me/access', { params: { course_id: courseId } })
+    return { course: !!res.data.course, lessons: new Set((res.data.lessons as number[]).map(String)) }
+  } catch {
+    return { course: false, lessons: new Set() }
+  }
+}
+
+async function getMyAttemptSummaries(courseId: string): Promise<Map<string, any>> {
+  const decoded = getDecodedToken()
+  if (!decoded) return new Map()
+  try {
+    const res = await apiClient.get('/api/assessments/my-attempts', { params: { course_id: courseId } })
+    return new Map((res.data as any[]).map((a) => [String(a.assessment_id), a]))
+  } catch {
+    return new Map()
   }
 }
 
@@ -355,88 +403,157 @@ export const getAvailableCourses = async (grade?: number | null, streamId?: numb
   return items.map(mapCourse)
 }
 
+function mapExam(a: any, isEnrolled: boolean, isFree: boolean, attempt?: any): ExamWithAccess {
+  return {
+    id: String(a.id),
+    title: a.title,
+    description: a.description ?? null,
+    image_url: a.image_url ?? null,
+    duration_minutes: a.time_limit_minutes ?? 0,
+    total_questions: a.question_count ?? 0,
+    is_free: isFree,
+    is_enrolled: isEnrolled,
+    enrollment_type: isEnrolled ? 'course' : null,
+    already_attempted: !!attempt,
+    last_score: attempt ? attempt.last_score : null,
+    last_total: null,
+    is_passed: attempt ? !!attempt.passed : false,
+    scheduled_start: a.scheduled_start ?? null,
+  }
+}
+
+// Course → lessons (course_service modules). Video courses: lessons hold
+// videos + materials. Exam courses: lessons hold exams (assessment_service).
 export const getCourseOverview = async (courseId: string): Promise<Course> => {
-  const [courseRes, modulesRes] = await Promise.all([
-    apiClient.get(`/api/courses/${courseId}`),
-    apiClient.get(`/api/courses/${courseId}/modules`),
+  const [courseRes, access] = await Promise.all([
+    apiClient.get(`/api/courses/${courseId}`, { params: { include_modules: true } }),
+    getCourseAccess(courseId),
   ])
   const course = mapCourse(courseRes.data)
+  course.is_enrolled = access.course
+  const hasAnyAccess = access.course || access.lessons.size > 0
+  const lessons: any[] = courseRes.data.modules ?? []
 
-  const modules: VideoModule[] = await Promise.all(
-    modulesRes.data.map(async (m: any) => {
-      let lessons: any[] = []
-      try {
-        const lessonsRes = await apiClient.get(`/api/courses/${courseId}/modules/${m.id}/lessons`)
-        lessons = lessonsRes.data
-      } catch {
-        lessons = []
-      }
-      const videos: VideoLesson[] = lessons.map((l: any) => ({
-        id: String(l.id),
-        module_id: String(m.id),
-        title: l.title,
-        description: null,
-        yt_video_id: l.youtube_video_id ?? '',
-        duration_seconds: l.duration_seconds ?? 0,
-        order_number: l.order ?? 0,
-        is_published: true,
-        is_completed: false,
-        watched_percentage: 0,
-      }))
+  if (course.course_type === 'exam') {
+    const [examsRes, attempts] = await Promise.all([
+      apiClient.get('/api/assessments/', { params: { course_id: courseId } }),
+      hasAnyAccess ? getMyAttemptSummaries(courseId) : Promise.resolve(new Map<string, any>()),
+    ])
+    const exams: any[] = examsRes.data
+    course.sub_courses = lessons.map((m) => {
+      const lessonUnlocked = unlocks(access, m.id)
+      const lessonExams = exams
+        .filter((a) => a.module_id != null && String(a.module_id) === String(m.id))
+        .map((a) => mapExam(a, lessonUnlocked, course.price === 0, attempts.get(String(a.id))))
+      const passed = lessonExams.filter((e) => e.is_passed).length
       return {
         id: String(m.id),
         title: m.title,
-        description: null,
-        image_url: null,
+        description: m.description ?? null,
+        image_url: m.image_url ?? null,
         order_number: m.order ?? 0,
-        is_active: true,
+        is_active: m.is_active ?? true,
+        is_enrolled: lessonUnlocked,
+        progress_percentage: lessonExams.length ? Math.round((passed / lessonExams.length) * 100) : 0,
+        exams: lessonExams,
+      }
+    })
+    course.modules = []
+    return course
+  }
+
+  // Video ids and material files are enrollment-gated by course_service, so
+  // only fetch them for enrolled viewers; everyone else sees the outline.
+  let completedIds = new Set<string>()
+  if (hasAnyAccess) {
+    try {
+      const progressRes = await apiClient.get(`/api/progress/courses/${courseId}/lessons/progress`)
+      completedIds = new Set(
+        progressRes.data.filter((p: any) => p.is_completed).map((p: any) => String(p.lesson_id))
+      )
+    } catch {
+      // no progress recorded yet
+    }
+  }
+
+  course.modules = await Promise.all(
+    lessons.map(async (m: any): Promise<VideoModule> => {
+      const lessonUnlocked = unlocks(access, m.id)
+      let videos: VideoLesson[] = []
+      let materials: VideoMaterial[] = []
+      let rawMaterials: any[] = []
+      if (lessonUnlocked) {
+        const [videosRes, materialsRes] = await Promise.all([
+          apiClient.get(`/api/courses/${courseId}/modules/${m.id}/lessons`).catch(() => ({ data: [] })),
+          apiClient.get(`/api/courses/${courseId}/modules/${m.id}/materials`).catch(() => ({ data: [] })),
+        ])
+        rawMaterials = materialsRes.data
+        materials = rawMaterials.map(mapMaterial)
+        videos = videosRes.data.map((l: any) => ({
+          id: String(l.id),
+          module_id: String(m.id),
+          title: l.title,
+          description: l.description ?? null,
+          yt_video_id: l.youtube_video_id ?? '',
+          duration_seconds: l.duration_seconds ?? 0,
+          order_number: l.order ?? 0,
+          is_published: true,
+          is_completed: completedIds.has(String(l.id)),
+          watched_percentage: completedIds.has(String(l.id)) ? 100 : 0,
+          materials: rawMaterials
+            .filter((mat) => mat.lesson_id != null && String(mat.lesson_id) === String(l.id))
+            .map(mapMaterial),
+          checkpoints: (l.checkpoints ?? []).map((cp: any) => ({
+            id: String(cp.id),
+            video_id: String(cp.video_id),
+            timestamp_seconds: cp.timestamp_seconds,
+            questions: (cp.questions ?? []).map((q: any) => ({
+              ...q,
+              id: String(q.id),
+              checkpoint_id: String(q.checkpoint_id),
+            })),
+          })),
+        }))
+      }
+      const videoCount = lessonUnlocked ? videos.length : m.lesson_count ?? 0
+      const done = videos.filter((v) => v.is_completed).length
+      return {
+        id: String(m.id),
+        title: m.title,
+        description: m.description ?? null,
+        image_url: m.image_url ?? null,
+        order_number: m.order ?? 0,
+        is_active: m.is_active ?? true,
+        is_enrolled: lessonUnlocked,
         videos,
-        materials: [],
-        video_count: videos.length,
+        materials,
+        video_count: videoCount,
+        progress_percentage: videos.length ? Math.round((done / videos.length) * 100) : 0,
       }
     })
   )
-
-  course.modules = modules
   return course
 }
 
 export const getCourseExams = async (courseId: string): Promise<ExamWithAccess[]> => {
-  const decoded = getDecodedToken()
-  const response = await apiClient.get('/api/assessments/', { params: { course_id: courseId } })
-
-  let isEnrolled = true
-  if (decoded?.role === 'student') {
-    try {
-      const enrollRes = await apiClient.get('/api/enrollments', {
-        params: { student_id: decoded.sub, course_id: courseId },
-      })
-      isEnrolled = enrollRes.data?.status === 'ACTIVE'
-    } catch {
-      isEnrolled = false
-    }
-  }
-
-  return response.data.map((a: any) => ({
-    id: String(a.id),
-    title: a.title,
-    description: a.description ?? null,
-    image_url: null,
-    duration_minutes: a.time_limit_minutes ?? 0,
-    total_questions: 0, // not known until the session starts
-    is_free: false,
-    is_enrolled: isEnrolled,
-    enrollment_type: isEnrolled ? 'course' : null,
-    already_attempted: false, // assessment_service has no "my submissions" lookup
-    last_score: null,
-    last_total: null,
-    scheduled_start: null,
-  }))
+  const [examsRes, access, attempts] = await Promise.all([
+    apiClient.get('/api/assessments/', { params: { course_id: courseId } }),
+    getCourseAccess(courseId),
+    getMyAttemptSummaries(courseId),
+  ])
+  return examsRes.data.map((a: any) => mapExam(a, unlocks(access, a.module_id), false, attempts.get(String(a.id))))
 }
 
-// No sub-course concept exists in Edura.
-export const getSubCourseExams = async (_subCourseId: string): Promise<ExamWithAccess[]> => {
-  return []
+export const getSubCourseExams = async (subCourseId: string): Promise<ExamWithAccess[]> => {
+  const response = await apiClient.get('/api/assessments/', { params: { module_id: subCourseId } })
+  const exams: any[] = response.data
+  if (exams.length === 0) return []
+  const courseId = String(exams[0].course_id)
+  const [access, attempts] = await Promise.all([
+    getCourseAccess(courseId),
+    getMyAttemptSummaries(courseId),
+  ])
+  return exams.map((a) => mapExam(a, unlocks(access, a.module_id), false, attempts.get(String(a.id))))
 }
 
 // ── Enrollment ───────────────────────────────────────────────────────────
@@ -466,25 +583,23 @@ export const enrollFreeVideoModule = async (_moduleId: string): Promise<Enrollme
   throw new Error('Free enrollment is not supported — enrollment is created automatically after a successful payment.')
 }
 
-// enrollment_service can only answer "is this student enrolled in this
-// specific course" (student_id + course_id) — there's no bulk listing
-// endpoint. We approximate "my enrollments" by checking each published
-// course against that lookup.
 export const getMyEnrollments = async (_offset = 0, _limit = 50): Promise<MyEnrollmentsResponse> => {
   const decoded = getDecodedToken()
   const empty: MyEnrollmentsResponse = { courses: [], sub_courses: [], modules: [], exams: [] }
   if (!decoded) return empty
 
-  const courses = await getAvailableCourses()
+  const enrollmentsRes = await apiClient.get('/api/enrollments/me')
+  // Whole-course enrollments only; single-lesson grants show inside the course page.
+  const active = (enrollmentsRes.data as any[]).filter(
+    (e) => String(e.status).toUpperCase() === 'ACTIVE' && e.module_id == null
+  )
   const checks = await Promise.all(
-    courses.map(async (c) => {
+    active.map(async (enrollment) => {
       try {
-        const res = await apiClient.get('/api/enrollments', {
-          params: { student_id: decoded.sub, course_id: c.id },
-        })
-        return res.data?.status === 'ACTIVE' ? { course: c, enrollment: res.data } : null
+        const res = await apiClient.get(`/api/courses/${enrollment.course_id}`)
+        return { course: mapCourse(res.data), enrollment }
       } catch {
-        return null
+        return null // course unpublished or removed since enrolling
       }
     })
   )
@@ -509,20 +624,35 @@ export const getMyEnrollments = async (_offset = 0, _limit = 50): Promise<MyEnro
   return { courses: courseItems, sub_courses: [], modules: [], exams: [] }
 }
 
-// Edura has no dedicated access-check endpoint, but fetching the assessment
-// itself (real call) gives enough to populate the pre-exam preview; there's
-// no separate "locked" concept, so is_locked is always false.
+// Edura has no dedicated access-check endpoint; fetching the assessment plus
+// the caller's enrollment covers the pre-exam preview and its two gates:
+// not enrolled, and not yet open (scheduled_start in the future).
 export const checkExamAccess = async (examId: string) => {
   const res = await apiClient.get(`/api/assessments/${examId}`)
+  const exam = res.data
+  const isEnrolled = unlocks(await getCourseAccess(String(exam.course_id)), exam.module_id)
+  const startsAt = exam.scheduled_start ? new Date(exam.scheduled_start) : null
+  const notStartedYet = !!startsAt && startsAt > new Date()
+
+  let lockReason: string | null = null
+  let lockMessage: string | null = null
+  if (!isEnrolled) {
+    lockReason = 'not_enrolled'
+    lockMessage = 'Enroll in this course to take this exam.'
+  } else if (notStartedYet) {
+    lockReason = 'not_started_yet'
+    lockMessage = `This exam opens on ${startsAt!.toLocaleString()}.`
+  }
+
   return {
-    has_access: true,
-    is_locked: false,
-    lock_message: null as string | null,
-    lock_reason: null as string | null,
+    has_access: isEnrolled && !notStartedYet,
+    is_locked: lockReason !== null,
+    lock_message: lockMessage,
+    lock_reason: lockReason,
     exam: {
-      title: res.data.title as string,
-      duration_minutes: (res.data.time_limit_minutes as number) ?? 0,
-      total_questions: 0, // not known until the session starts
+      title: exam.title as string,
+      duration_minutes: (exam.time_limit_minutes as number) ?? 0,
+      total_questions: (exam.question_count as number) ?? 0,
     },
   }
 }
@@ -548,7 +678,7 @@ export const startExam = async (examId: string): Promise<StartExamResponse> => {
     return {
       id: String(q.id),
       question_text: q.question_text,
-      question_image_url: null,
+      question_image_url: q.question_image_url ?? null,
       explanation: null,
       order_number: q.position,
       // Edura submits answers by option text, not a stable option id — use
@@ -556,7 +686,7 @@ export const startExam = async (examId: string): Promise<StartExamResponse> => {
       options: optionTexts.map((text, idx) => ({
         id: text,
         option_text: text,
-        option_image_url: null,
+        option_image_url: q.option_image_urls?.[idx] ?? null,
         order_number: idx,
       })),
     }
@@ -612,20 +742,57 @@ export const submitExamAttempt = async (
   return mapSubmitResponse(attemptId, examId, data)
 }
 
+function mapReviewItems(items: any[] | undefined) {
+  return (items ?? []).map((r: any) => ({
+    question_id: String(r.question_id),
+    question_text: r.question_text,
+    question_image_url: r.question_image_url ?? null,
+    explanation: r.explanation ?? null,
+    video_url: null,
+    selected_option_id: r.selected_option_id ?? null,
+    correct_option_id: r.correct_option_id,
+    is_correct: r.is_correct,
+    options: (r.options ?? []).map((o: any) => ({
+      id: o.id,
+      option_text: o.option_text,
+      option_image_url: o.option_image_url ?? null,
+      order_number: o.order_number,
+    })),
+  }))
+}
+
+// assessment_service /submissions/{id}/review — used by My Results and by
+// admins viewing a student's attempt.
+export function mapAttemptReview(data: any) {
+  return {
+    attempt_id: String(data.attempt_id),
+    marks_obtained: data.marks_obtained,
+    total_questions: data.total_questions,
+    time_taken_seconds: data.time_taken_seconds ?? 0,
+    submitted_at: data.submitted_at,
+    score: data.score,
+    passed: data.passed,
+    review: mapReviewItems(data.review),
+    ranking: {
+      exam_id: String(data.ranking.exam_id),
+      course_id: String(data.ranking.course_id),
+      exam_title: data.ranking.exam_title ?? '',
+      course_title: data.ranking.course_title ?? '',
+      subject: data.ranking.subject ?? '',
+      overall_rank: data.ranking.overall_rank ?? null,
+      district_rank: data.ranking.district_rank ?? null,
+    },
+  }
+}
+
 function mapSubmitResponse(attemptId: string, examId: string, data: any): SubmitExamResponse {
   return {
     attempt_id: attemptId,
+    new_badges: (data.new_badges ?? []).map((b: any) => ({ ...b, id: String(b.id) })),
     marks_obtained: data.correct_count,
     total_questions: data.total_questions,
     time_taken_seconds: data.time_taken_seconds ?? 0,
-    review: (data.review ?? []).map((r: any) => ({
-      question_id: String(r.question_id),
-      question_text: r.question_text,
-      explanation: r.explanation ?? null,
-      selected_option_id: r.selected_option_id ?? null,
-      correct_option_id: r.correct_option_id,
-      is_correct: r.is_correct,
-    })),
+    review: mapReviewItems(data.review),
     ranking: {
       exam_id: examId,
       course_id: data.ranking?.course_id != null ? String(data.ranking.course_id) : '',
@@ -663,33 +830,21 @@ export interface LeaderboardEntry {
   is_current_user: boolean
 }
 
-// Resolve an assessment_id to its parent course_id (progress_service's
-// leaderboard is keyed by course, not by individual assessment).
-async function resolveAssessmentCourse(examId: string): Promise<{ courseId: string; title: string }> {
-  const res = await apiClient.get(`/api/assessments/${examId}`)
-  return { courseId: String(res.data.course_id), title: res.data.title }
-}
-
+// Rankings are per exam, from each student's first attempt (assessment_service).
 export const getExamRanking = async (examId: string): Promise<ExamRankResponse> => {
-  const decoded = getDecodedToken()
-  const { courseId, title } = await resolveAssessmentCourse(examId)
-  const res = await apiClient.get(`/api/progress/courses/${courseId}/leaderboard`)
-  const mine = decoded ? res.data.find((r: any) => String(r.student_id) === decoded.sub) : null
-
-  return {
-    exam_id: examId,
-    course_id: courseId,
-    exam_title: title,
-    course_title: '',
-    subject: '',
-    overall_rank: mine ? mine.rank : null,
-    district_rank: null,
-  }
+  const response = await apiClient.get(`/api/assessments/rankings/exam/${examId}`)
+  return response.data
 }
 
-export const getMyAttempts = async (_limit = 10): Promise<MyAttemptItem[]> => {
-  // assessment_service has no "list my submissions" endpoint.
-  return []
+export const getMyAttempts = async (limit = 10): Promise<MyAttemptItem[]> => {
+  const response = await apiClient.get('/api/assessments/my-submissions', { params: { limit } })
+  return response.data.map((a: any) => ({
+    ...a,
+    attempt_id: String(a.attempt_id),
+    exam_id: String(a.exam_id),
+    course_id: a.course_id != null ? String(a.course_id) : null,
+    sub_course_id: a.sub_course_id != null ? String(a.sub_course_id) : null,
+  }))
 }
 
 export interface RankingExam {
@@ -699,50 +854,22 @@ export interface RankingExam {
   subject: string
 }
 
-// No single endpoint enumerates assessments across every course, so this
-// composes one from the two real endpoints that do exist: list published
-// courses, then list each course's published assessments.
+// Public: exams that have been attempted (only the caller's own when signed in as a student).
 export const getRankingExams = async (): Promise<RankingExam[]> => {
-  const courses = await getAvailableCourses()
-  const perCourse = await Promise.all(
-    courses.map(async (c) => {
-      try {
-        const res = await apiClient.get('/api/assessments/', { params: { course_id: c.id } })
-        return res.data.map((a: any) => ({
-          exam_id: String(a.id),
-          exam_title: a.title,
-          course_title: c.title,
-          subject: c.subject,
-        }))
-      } catch {
-        return []
-      }
-    })
-  )
-  return perCourse.flat()
+  const response = await apiClient.get('/api/assessments/rankings/exams')
+  return response.data
 }
 
 export const getRankingsLeaderboard = async (
   exam_id: string,
-  _district?: string,
+  district?: string,
   limit = 50,
-  _offset = 0
+  offset = 0
 ): Promise<LeaderboardEntry[]> => {
-  const decoded = getDecodedToken()
-  const { courseId } = await resolveAssessmentCourse(exam_id)
-  const res = await apiClient.get(`/api/progress/courses/${courseId}/leaderboard`)
-  return res.data.slice(0, limit).map((row: any) => ({
-    rank: row.rank,
-    district_rank: 0,
-    full_name: `Student #${row.student_id}`,
-    school: '',
-    district: '',
-    grade: 0,
-    score: row.points,
-    time_taken_seconds: 0,
-    attempts: 0,
-    is_current_user: decoded ? String(row.student_id) === decoded.sub : false,
-  }))
+  const response = await apiClient.get('/api/assessments/rankings/leaderboard', {
+    params: { exam_id, district: district || undefined, limit, offset },
+  })
+  return response.data
 }
 
 
@@ -765,9 +892,10 @@ export interface PlatformStats {
   top_courses: TopCourse[]
 }
 
+// Public, aggregated by analytics_service from the owning services.
 export const getPlatformStats = async (): Promise<PlatformStats> => {
-  // analytics_service is an empty stub in Edura today.
-  return { total_students: 0, total_courses: 0, total_exams: 0, total_attempts: 0, top_courses: [] }
+  const response = await apiClient.get('/api/analytics/platform-stats')
+  return response.data
 }
 
 export const getSubjects = async (grade?: number, stream_id?: string | null): Promise<string[]> => {
@@ -802,17 +930,21 @@ export interface ReferralEventListResponse {
 }
 
 export const getReferralSummary = async (): Promise<ReferralSummary> => {
-  throw new Error('Referrals are not supported by the Edura backend.')
+  const response = await apiClient.get('/api/users/referral/summary')
+  return response.data
 }
 
-export const getReferralEvents = async (_limit = 50): Promise<ReferralEventListResponse> => {
-  return { events: [] }
+export const getReferralEvents = async (limit = 50): Promise<ReferralEventListResponse> => {
+  const response = await apiClient.get('/api/users/referral/events', { params: { limit } })
+  return response.data
 }
 
+// Credit goes to the referrer when this student first enrolls, not now.
 export const applyReferralCode = async (
-  _referralCode: string
+  referralCode: string
 ): Promise<{ message: string; credit_amount: number }> => {
-  throw new Error('Referrals are not supported by the Edura backend.')
+  const response = await apiClient.post('/api/users/referral/apply', { referral_code: referralCode.trim() })
+  return { message: response.data.message, credit_amount: 0 }
 }
 
 export interface Stream {
@@ -835,30 +967,19 @@ export const getStreams = async (): Promise<Stream[]> => {
 }
 
 export const getMyProgress = async (): Promise<StudentProgressData> => {
-  throw new Error('Aggregate progress analytics are not supported by the Edura backend — see per-course progress instead.')
+  const response = await apiClient.get('/api/analytics/me/progress')
+  return response.data
 }
 
-export const fetchAttemptReview = async (_attemptId: string): Promise<any> => {
-  throw new Error('Attempt review is not supported by the Edura backend yet.')
+export const fetchAttemptReview = async (attemptId: string): Promise<any> => {
+  const response = await apiClient.get(`/api/assessments/submissions/${attemptId}/review`)
+  return mapAttemptReview(response.data)
 }
 
-// Video Classes — reuses the same real course_service + content_service data
-// as getCourseOverview (Edura doesn't distinguish "exam courses" from "video
-// classes"; every course exposes whatever modules/lessons it has), enriched
-// with each lesson's real watched/completed state from progress_service.
+// The overview already carries lessons → videos/materials with each video's
+// completed state from progress_service.
 export const getVideoClassDetails = async (courseId: string): Promise<Course> => {
-  const course = await getCourseOverview(courseId)
-  try {
-    const progressRes = await apiClient.get(`/api/progress/courses/${courseId}/lessons/progress`)
-    const completedIds = new Set(progressRes.data.filter((p: any) => p.is_completed).map((p: any) => String(p.lesson_id)))
-    course.modules = (course.modules ?? []).map((m) => ({
-      ...m,
-      videos: m.videos.map((v) => ({ ...v, is_completed: completedIds.has(v.id) })),
-    }))
-  } catch {
-    // Not enrolled yet, or progress_service unreachable — videos just show as not-yet-watched.
-  }
-  return course
+  return getCourseOverview(courseId)
 }
 
 export const updateVideoProgress = async (data: {
@@ -902,14 +1023,32 @@ export interface StudentClassEnrollment {
   expires_at: string | null
 }
 
+// Filtered to the student's own grade/stream, like the course catalogue.
 export const getStudentClassPackages = async (): Promise<StudentClassPackage[]> => {
-  return []
+  let grade: number | undefined
+  let streamId: string | undefined
+  const decoded = getDecodedToken()
+  if (decoded?.role === 'student') {
+    try {
+      const profile = (await apiClient.get(`/api/users/${decoded.sub}`)).data
+      grade = profile.grade ?? undefined
+      streamId = profile.stream_id != null ? String(profile.stream_id) : undefined
+    } catch {
+      // No profile yet: show every package.
+    }
+  }
+  const response = await apiClient.get('/api/enrollments/class-packages', {
+    params: { grade, stream_id: grade && grade >= 12 ? streamId : undefined },
+  })
+  return response.data
 }
 
-export const enrollFreeClassPackage = async (_packageId: string): Promise<StudentClassEnrollment> => {
-  throw new Error('Class packages are not supported by the Edura backend.')
+export const enrollFreeClassPackage = async (packageId: string): Promise<StudentClassEnrollment> => {
+  const response = await apiClient.post(`/api/enrollments/class-packages/${packageId}/enroll-free`)
+  return response.data
 }
 
 export const getMyClassEnrollments = async (): Promise<StudentClassEnrollment[]> => {
-  return []
+  const response = await apiClient.get('/api/enrollments/my-class-enrollments')
+  return response.data
 }

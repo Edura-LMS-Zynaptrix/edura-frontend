@@ -32,7 +32,7 @@ export default function CourseSubCoursesPage() {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [selectedForAccess, setSelectedForAccess] = useState<{ id: string, title: string } | null>(null)
+  const [selectedForAccess, setSelectedForAccess] = useState<{ id: string; title: string } | null>(null)
 
   const [formConfig, setFormConfig] = useState({
     title: '',
@@ -67,8 +67,8 @@ export default function CourseSubCoursesPage() {
   }
 
   const pageTitle = useMemo(() => {
-    if (!course) return 'Manage Sub-Courses'
-    return `Manage Sub-Courses • ${course.title}`
+    if (!course) return 'Manage Lessons'
+    return `Manage Lessons • ${course.title}`
   }, [course])
 
   useEffect(() => {
@@ -148,7 +148,7 @@ export default function CourseSubCoursesPage() {
 
       closeCreateModal()
     } catch (err: any) {
-      setLocalError(getErrorMessage(err) || 'Failed to create sub-course')
+      setLocalError(getErrorMessage(err) || 'Failed to create lesson')
     } finally {
       setIsCreating(false)
     }
@@ -235,6 +235,7 @@ export default function CourseSubCoursesPage() {
       }
 
       await dispatch(updateSubCourse({
+        courseId: String(courseId),
         id: editingId,
         data: {
           title: title,
@@ -248,14 +249,14 @@ export default function CourseSubCoursesPage() {
 
       closeEditModal()
     } catch (err: any) {
-      setLocalError(getErrorMessage(err) || 'Failed to update sub-course')
+      setLocalError(getErrorMessage(err) || 'Failed to update lesson')
     } finally {
       setIsCreating(false)
     }
   }
 
   const handleDelete = async (item: AdminSubCourse) => {
-    const confirmed = window.confirm(`Delete module "${item.title}"? All exams inside will also be deleted.`)
+    const confirmed = window.confirm(`Delete lesson "${item.title}"? All exams inside will also be deleted.`)
     if (!confirmed) return
 
     try {
@@ -263,9 +264,9 @@ export default function CourseSubCoursesPage() {
       if (item.image_public_id) {
         await deleteImageFromCloudinary(item.image_public_id)
       }
-      await dispatch(deleteSubCourse(item.id)).unwrap()
+      await dispatch(deleteSubCourse({ courseId: String(courseId), id: item.id })).unwrap()
     } catch (err: any) {
-      setLocalError(getErrorMessage(err) || 'Failed to delete sub-course')
+      setLocalError(getErrorMessage(err) || 'Failed to delete lesson')
     }
   }
 
@@ -299,12 +300,12 @@ export default function CourseSubCoursesPage() {
         )}
 
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900">Sub-Courses / Modules</h2>
+          <h2 className="text-lg font-semibold text-gray-900">Lessons</h2>
           <button
             onClick={openCreateModal}
             className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-black font-medium"
           >
-            + Create Sub-Course
+            + Create Lesson
           </button>
         </div>
 
@@ -313,9 +314,9 @@ export default function CourseSubCoursesPage() {
             <p className="text-sm text-gray-500">Loading data...</p>
           ) : subCourses.length === 0 ? (
             <div className="text-center py-12">
-               <p className="text-gray-500 mb-4">No sub-courses yet in this course</p>
+               <p className="text-gray-500 mb-4">No lessons yet in this course</p>
                <button onClick={openCreateModal} className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-black">
-                 Create your first Sub-Course
+                 Create your first Lesson
                </button>
             </div>
           ) : (
@@ -339,7 +340,7 @@ export default function CourseSubCoursesPage() {
                       >
                         Manage Exams
                       </Link>
-                      <button 
+                      <button
                         onClick={() => setSelectedForAccess({ id: item.id, title: item.title })}
                         className="block w-full px-3 py-2 text-xs rounded-md bg-amber-100 text-amber-700 hover:bg-amber-200 text-center font-bold uppercase tracking-wider transition-colors"
                       >
@@ -363,13 +364,13 @@ export default function CourseSubCoursesPage() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-gray-900">Create Sub-Course</h2>
+              <h2 className="text-xl font-semibold text-gray-900">Create Lesson</h2>
               <button onClick={closeCreateModal} className="text-gray-500 hover:text-gray-700">✕</button>
             </div>
             <form onSubmit={handleCreate} className="p-6 space-y-4">
               {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">{error}</div>}
 
-              <input className="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Sub-course module title" value={formConfig.title} onChange={(e) => setFormConfig({...formConfig, title: e.target.value})} required />
+              <input className="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Lesson title (e.g. Lesson 01 - Algebra)" value={formConfig.title} onChange={(e) => setFormConfig({...formConfig, title: e.target.value})} required />
               <textarea className="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Description (optional)" value={formConfig.description} onChange={(e) => setFormConfig({...formConfig, description: e.target.value})} rows={3} />
               
               <div className="grid grid-cols-2 gap-3">
@@ -392,7 +393,7 @@ export default function CourseSubCoursesPage() {
               <div className="flex gap-3 pt-4 border-t border-gray-200">
                 <button type="button" onClick={closeCreateModal} className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">Cancel</button>
                 <button type="submit" disabled={isCreating} className="flex-1 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-black disabled:opacity-50">
-                  {isCreating ? 'Creating...' : 'Create Sub-Course'}
+                  {isCreating ? 'Creating...' : 'Create Lesson'}
                 </button>
               </div>
             </form>
@@ -405,13 +406,13 @@ export default function CourseSubCoursesPage() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-gray-900">Edit Sub-Course</h2>
+              <h2 className="text-xl font-semibold text-gray-900">Edit Lesson</h2>
               <button onClick={closeEditModal} className="text-gray-500 hover:text-gray-700">✕</button>
             </div>
             <form onSubmit={handleEdit} className="p-6 space-y-4">
               {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">{error}</div>}
 
-              <input className="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Sub-course module title" value={formConfig.title} onChange={(e) => setFormConfig({...formConfig, title: e.target.value})} required />
+              <input className="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Lesson title (e.g. Lesson 01 - Algebra)" value={formConfig.title} onChange={(e) => setFormConfig({...formConfig, title: e.target.value})} required />
               <textarea className="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Description (optional)" value={formConfig.description} onChange={(e) => setFormConfig({...formConfig, description: e.target.value})} rows={3} />
               
               <div className="grid grid-cols-2 gap-3">
@@ -448,18 +449,18 @@ export default function CourseSubCoursesPage() {
               <div className="flex gap-3 pt-4 border-t border-gray-200">
                 <button type="button" onClick={closeEditModal} className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">Cancel</button>
                 <button type="submit" disabled={isCreating} className="flex-1 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-black disabled:opacity-50">
-                  {isCreating ? 'Updating...' : 'Update Sub-Course'}
+                  {isCreating ? 'Updating...' : 'Update Lesson'}
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
-      {/* Access Management Modal */}
       {selectedForAccess && (
         <EnrollmentAccessModal
           type="sub_course"
           id={selectedForAccess.id}
+          courseId={String(courseId)}
           title={selectedForAccess.title}
           onClose={() => setSelectedForAccess(null)}
         />

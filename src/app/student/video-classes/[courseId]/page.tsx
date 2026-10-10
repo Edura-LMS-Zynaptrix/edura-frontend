@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { useParams, useRouter, usePathname, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
@@ -79,6 +79,14 @@ export default function VideoClassPlayerPage() {
   const [error, setError] = useState('')
   const [currentVideo, setCurrentVideo] = useState<VideoLesson | null>(null)
   const [expandedModules, setExpandedModules] = useState<Record<string, boolean>>({})
+
+  // This video's own materials, plus the ones shared by its whole lesson.
+  const currentVideoResources = useMemo(() => {
+    if (!currentVideo) return []
+    const lesson = (course?.modules ?? []).find((m: any) => String(m.id) === String(currentVideo.module_id))
+    const shared = (lesson?.materials ?? []).filter((mat: any) => !mat.video_id)
+    return [...(currentVideo.materials ?? []), ...shared]
+  }, [course, currentVideo])
 
   // Player UI State
   const [isPlaying, setIsPlaying] = useState(false)
@@ -604,7 +612,7 @@ export default function VideoClassPlayerPage() {
                     <div className="md:col-span-4 space-y-6">
                        <h3 className="text-lg font-black text-white flex items-center gap-3"><Download size={20} className="text-teal-500" /> Resources</h3>
                        <div className="space-y-3">
-                         {currentVideo.materials?.length ? currentVideo.materials.map((mat: any) => (
+                         {currentVideoResources.length ? currentVideoResources.map((mat: any) => (
                            <a key={mat.id} href={mat.file_url} target="_blank" className="flex items-center gap-4 p-4 bg-slate-900/50 border border-slate-800 hover:border-teal-500/50 hover:bg-slate-800 rounded-2xl transition-all group">
                              <div className="w-10 h-10 flex items-center justify-center bg-teal-500/10 text-teal-500 rounded-xl group-hover:scale-110 transition-all"><Download size={18} /></div>
                              <div className="overflow-hidden"><p className="text-[12px] font-black text-slate-200 line-clamp-1 group-hover:text-teal-400 transition-colors uppercase tracking-tight">{mat.title}</p><p className="text-[9px] text-slate-500 font-bold uppercase mt-0.5">Reference Material</p></div>

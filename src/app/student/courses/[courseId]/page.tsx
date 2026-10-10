@@ -5,11 +5,8 @@ import { useParams, useRouter } from 'next/navigation'
 import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
 import {
   fetchCourseOverview,
-  fetchCourseExams,
-  enrollFreeSubCourseThunk,
   enrollFreeCourseThunk,
-  enrollFreeVideoCourseThunk,
-  enrollFreeModuleThunk
+  enrollFreeVideoCourseThunk
 } from '@/lib/redux/slices/coursesSlice'
 import { fetchPublicStreams } from '@/lib/redux/slices/adminSlice'
 import { ExamWithAccess } from '@/lib/api/student'
@@ -23,7 +20,7 @@ export default function CourseOverviewPage() {
   const courseId = params?.courseId as string
   const dispatch = useAppDispatch()
 
-  const { currentCourse: course, currentCourseExams: exams, studentLoading: loading, studentError: error } = useAppSelector(state => state.courses)
+  const { currentCourse: course, studentLoading: loading, studentError: error } = useAppSelector(state => state.courses)
   const { streams } = useAppSelector(state => state.admin)
   const { isAuthenticated, needsProfileCompletion } = useAppSelector(state => state.auth)
 
@@ -51,7 +48,6 @@ export default function CourseOverviewPage() {
   useEffect(() => {
     if (courseId) {
       dispatch(fetchCourseOverview(courseId))
-      dispatch(fetchCourseExams(courseId))
     }
   }, [dispatch, courseId])
 
@@ -62,27 +58,6 @@ export default function CourseOverviewPage() {
   }, [dispatch, streams.length])
 
 
-
-  const handleEnrollFreeSubCourse = async (subCourseId: string) => {
-    if (!isAuthenticated) {
-      router.push(`/login?callbackUrl=${encodeURIComponent(window.location.pathname + window.location.search)}`)
-      return
-    }
-    try {
-      setEnrolling(subCourseId)
-      await dispatch(enrollFreeSubCourseThunk(subCourseId)).unwrap()
-      // Reload to update enrollment status
-      dispatch(fetchCourseOverview(courseId))
-    } catch (err: any) {
-      setStatusModal({
-        title: 'Enrollment Failed',
-        message: err || 'Failed to enroll in sub-course. Please try again.',
-        type: 'error'
-      })
-    } finally {
-      setEnrolling(null)
-    }
-  }
 
   const handleEnrollFreeCourse = async () => {
     if (!course) return
@@ -127,27 +102,6 @@ export default function CourseOverviewPage() {
       setEnrolling(null)
     }
   }
-
-  const handleEnrollFreeModule = async (moduleId: string) => {
-    if (!isAuthenticated) {
-      router.push(`/login?callbackUrl=${encodeURIComponent(window.location.pathname + window.location.search)}`)
-      return
-    }
-    try {
-      setEnrolling(moduleId)
-      await dispatch(enrollFreeModuleThunk(moduleId)).unwrap()
-      dispatch(fetchCourseOverview(courseId))
-    } catch (err: any) {
-      setStatusModal({
-        title: 'Enrollment Failed',
-        message: err || 'Failed to enroll in free module.',
-        type: 'error'
-      })
-    } finally {
-      setEnrolling(null)
-    }
-  }
-
 
   const handlePurchaseCourse = () => {
     if (!course) return
@@ -359,63 +313,13 @@ export default function CourseOverviewPage() {
         </div>
       </div>
 
-      {/* Assessments — Edura attaches assessments directly to a course
-          (no sub-course grouping), so this always shows alongside modules. */}
-      {exams.length > 0 && (
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 pt-10">
-          <h2 className="text-lg font-bold text-gray-900 mb-4">Assessments</h2>
-          <div className="bg-white rounded-2xl border border-gray-200 divide-y divide-gray-50">
-            {exams.map((exam) => {
-              const isAccessible = course.is_enrolled || exam.is_enrolled
-              return (
-                <div key={exam.id} className="flex items-center gap-3 px-4 sm:px-5 py-3 hover:bg-gray-50/80 transition-colors">
-                  <div className="w-10 h-10 rounded-xl shrink-0 bg-gray-100 flex items-center justify-center">
-                    <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h4 className="text-sm font-medium text-gray-900 truncate">{exam.title}</h4>
-                    <div className="text-[11px] sm:text-xs text-gray-400">
-                      {exam.duration_minutes > 0 ? `${exam.duration_minutes} Minutes` : 'No time limit'}
-                    </div>
-                  </div>
-                  <div className="shrink-0">
-                    {isAccessible ? (
-                      ongoingMap[exam.id] ? (
-                        <button
-                          onClick={() => handleStartExam(exam.id)}
-                          className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5"
-                        >
-                          <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
-                          {String(Math.floor(ongoingMap[exam.id].secondsLeft / 60)).padStart(2, '0')}:{String(ongoingMap[exam.id].secondsLeft % 60).padStart(2, '0')}
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => handleStartExam(exam.id)}
-                          className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-semibold transition-colors"
-                        >
-                          Start
-                        </button>
-                      )
-                    ) : (
-                      <span className="text-xs text-gray-400 font-medium">Enroll to unlock</span>
-                    )}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
       {/* Modules & Content */}
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-10">
         {course.course_type === 'video' ? (
            // Render Video Class Modules
            (!course.modules || course.modules.length === 0) ? (
             <div className="text-center py-16">
-              <p className="text-gray-400 text-sm">No video modules added yet.</p>
+              <p className="text-gray-400 text-sm">No lessons added yet.</p>
             </div>
            ) : (
              <div className="space-y-8">
@@ -435,7 +339,7 @@ export default function CourseOverviewPage() {
                         )}
                         <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between">
                           <div>
-                            <span className="text-[10px] font-bold text-white/70 uppercase tracking-widest bg-black/30 px-2 py-0.5 rounded-md backdrop-blur-sm">Module {module.order_number}</span>
+                            <span className="text-[10px] font-bold text-white/70 uppercase tracking-widest bg-black/30 px-2 py-0.5 rounded-md backdrop-blur-sm">Lesson {module.order_number}</span>
                             <h3 className="text-lg font-bold text-white mt-1 drop-shadow-sm">{module.title}</h3>
                           </div>
                           {isUnlocked && (
@@ -455,9 +359,9 @@ export default function CourseOverviewPage() {
                         {!isUnlocked ? (
                           <div className="flex items-center justify-between gap-4 p-3 bg-indigo-50/50 rounded-xl border border-indigo-100">
                             <div>
-                               <p className="text-[10px] text-indigo-400 font-bold uppercase tracking-wider">Module Locked</p>
+                               <p className="text-[10px] text-indigo-400 font-bold uppercase tracking-wider">Lesson Locked</p>
                                <p className="text-sm font-medium text-gray-700">
-                                 Please enroll in the course to access this module.
+                                 Please enroll in the course to access this lesson.
                                </p>
                             </div>
                           </div>
@@ -468,7 +372,7 @@ export default function CourseOverviewPage() {
                             
                             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                               <div className="flex items-center gap-4 text-sm text-gray-500">
-                                 <span className="flex items-center gap-1.5"><svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>{module.video_count || 0} Lessons</span>
+                                 <span className="flex items-center gap-1.5"><svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>{module.video_count || 0} Videos</span>
                                  <span className="flex items-center gap-1.5"><svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>Materials</span>
                               </div>
                               <button onClick={() => router.push(`/student/video-classes/${course.id}`)} className="w-full sm:w-auto px-6 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-sm font-bold transition-all shadow-md flex items-center justify-center gap-2">
@@ -502,7 +406,7 @@ export default function CourseOverviewPage() {
                         <img src={subCourse.image_url} alt={subCourse.title} className="w-full h-full object-cover" />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
                         <div className="absolute bottom-3 left-3 right-3 sm:left-4 sm:right-4 flex flex-wrap items-end justify-between gap-2">
-                          <span className="text-[11px] font-semibold text-white/80 uppercase tracking-wider">Module {subCourse.order_number || 1}</span>
+                          <span className="text-[11px] font-semibold text-white/80 uppercase tracking-wider">Lesson {subCourse.order_number || 1}</span>
                           {isUnlocked && (
                             <span className="text-[11px] text-white font-semibold flex items-center gap-1 bg-green-500/90 px-2 py-0.5 rounded-full">
                               <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7"/></svg>
@@ -514,7 +418,7 @@ export default function CourseOverviewPage() {
                     ) : (
                       <div className="relative h-24 sm:h-28 bg-gradient-to-br from-teal-500 to-teal-700">
                         <div className="absolute bottom-3 left-3 right-3 sm:left-4 sm:right-4 flex flex-wrap items-end justify-between gap-2">
-                          <span className="text-[11px] font-semibold text-white/80 uppercase tracking-wider">Module {subCourse.order_number || 1}</span>
+                          <span className="text-[11px] font-semibold text-white/80 uppercase tracking-wider">Lesson {subCourse.order_number || 1}</span>
                           {isUnlocked && (
                             <span className="text-[11px] text-white font-semibold flex items-center gap-1 bg-green-500/90 px-2 py-0.5 rounded-full">
                               <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7"/></svg>
@@ -540,7 +444,7 @@ export default function CourseOverviewPage() {
 
                       {!isUnlocked && (
                         <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-100">
-                           <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Module Locked</p>
+                           <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Lesson Locked</p>
                            <p className="text-xs text-gray-600 mt-1">Enroll in the course to unlock these exams.</p>
                         </div>
                       )}

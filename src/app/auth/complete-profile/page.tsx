@@ -4,7 +4,7 @@ import { Suspense, useState, useEffect } from 'react'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
-import { fetchCurrentUser, createProfile } from '@/lib/redux/slices/authSlice'
+import { fetchCurrentUser, createProfile, updateProfile } from '@/lib/redux/slices/authSlice'
 import { getStreams, getSubjects, Stream } from '@/lib/api/student'
 
 const DISTRICTS = [
@@ -14,6 +14,12 @@ const DISTRICTS = [
   'Polonnaruwa', 'Badulla', 'Monaragala', 'Ratnapura', 'Kegalle',
   'Ampara', 'Trincomalee', 'Batticaloa'
 ]
+
+// The profile stores first/last name; the form asks for one Full Name.
+function splitName(fullName: string) {
+  const [first, ...rest] = fullName.trim().split(/\s+/)
+  return { first_name: first || '', last_name: rest.join(' ') }
+}
 
 function CompleteProfilePageContent() {
   const router = useRouter()
@@ -43,6 +49,22 @@ function CompleteProfilePageContent() {
     district: false,
     nic_number: false,
   })
+
+  // A first Google sign-in already created the profile with the Google name
+  // and photo, so only ask for a name when there genuinely isn't one.
+  const existingProfile = user?.profile ?? null
+  const hasName = !!existingProfile?.first_name
+  const avatarUrl = existingProfile?.avatar_url || null
+
+  useEffect(() => {
+    if (!existingProfile) return
+    setForm((prev) => ({
+      ...prev,
+      first_name: prev.first_name || existingProfile.first_name || '',
+      last_name: prev.last_name || existingProfile.last_name || '',
+      mobile_no: prev.mobile_no || existingProfile.mobile_no || '',
+    }))
+  }, [existingProfile])
 
   useEffect(() => {
     if (isInitialized && !isAuthenticated) {
@@ -106,9 +128,9 @@ function CompleteProfilePageContent() {
   const isMobileValid = /^\d{10}$/.test(form.mobile_no.replace(/[\s\-\(\)]/g, ''))
   const isDistrictValid = form.district.trim().length >= 2
   const isNICValid = form.grade < 12 || /^([0-9]{9}[vVxX]|[0-9]{12})$/.test(form.nic_number)
+  const isNameValid = hasName || form.first_name.trim().length >= 2
   const isFormValid =
-    isMobileValid && isDistrictValid && isNICValid &&
-    form.first_name.trim().length >= 1 && form.last_name.trim().length >= 1 &&
+    isMobileValid && isDistrictValid && isNICValid && isNameValid &&
     form.school.trim().length >= 2 && form.selected_subjects.length > 0
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -120,22 +142,25 @@ function CompleteProfilePageContent() {
     setLoading(true)
     setError('')
     try {
-      await dispatch(
-        createProfile({
-          first_name: form.first_name.trim(),
-          last_name: form.last_name.trim(),
-          mobile_no: form.mobile_no.trim(),
-          school: form.school.trim(),
-          district: form.district,
-          grade: form.grade,
-          stream_id: form.grade >= 12 && form.stream_id ? Number(form.stream_id) : undefined,
-          nic_number: form.nic_number.trim() || undefined,
-          selected_subjects: form.selected_subjects,
-          referral_code: form.referral_code.trim() || undefined,
-        })
-      ).unwrap()
+      const details = {
+        mobile_no: form.mobile_no.trim(),
+        school: form.school.trim(),
+        district: form.district,
+        grade: form.grade,
+        stream_id: form.grade >= 12 && form.stream_id ? Number(form.stream_id) : undefined,
+        nic_number: form.nic_number.trim() || undefined,
+        selected_subjects: form.selected_subjects,
+        referral_code: form.referral_code.trim() || undefined,
+      }
+      if (existingProfile) {
+        await dispatch(
+          updateProfile(hasName ? details : { ...details, ...splitName(form.first_name) })
+        ).unwrap()
+      } else {
+        await dispatch(createProfile({ ...details, ...splitName(form.first_name) })).unwrap()
+      }
       await dispatch(fetchCurrentUser())
-      router.push('/dashboard')
+      router.push('/')
     } catch (err: any) {
       setError(typeof err === 'string' ? err : 'Failed to save profile. Please try again.')
     } finally {
@@ -143,8 +168,11 @@ function CompleteProfilePageContent() {
     }
   }
 
-  const initials = (form.first_name || form.last_name)
-    ? `${form.first_name[0] || ''}${form.last_name[0] || ''}`.toUpperCase()
+  const displayName = hasName
+    ? `${existingProfile?.first_name ?? ''} ${existingProfile?.last_name ?? ''}`.trim()
+    : form.first_name.trim()
+  const initials = displayName
+    ? displayName.split(/\s+/).map((n) => n[0]).join('').slice(0, 2).toUpperCase()
     : 'ST'
 
   return (
@@ -158,8 +186,19 @@ function CompleteProfilePageContent() {
             <span className="text-lg font-bold text-gray-900">Edura</span>
           </Link>
 
-          <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-teal-100 flex items-center justify-center text-2xl font-bold text-teal-700 uppercase">
-            {initials}
+          <div className="relative w-20 h-20 mx-auto mb-4">
+            {avatarUrl ? (
+              <img
+                src={avatarUrl}
+                alt="Profile"
+                referrerPolicy="no-referrer"
+                className="w-full h-full rounded-full border-4 border-teal-100 object-cover"
+              />
+            ) : (
+              <div className="w-full h-full rounded-full bg-teal-100 flex items-center justify-center text-2xl font-bold text-teal-700 uppercase">
+                {initials}
+              </div>
+            )}
           </div>
 
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Complete Your Profile 🎉</h1>
@@ -182,18 +221,13 @@ function CompleteProfilePageContent() {
 
         <form onSubmit={handleSubmit} className="space-y-5">
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          {!hasName && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">First Name <span className="text-red-500">*</span></label>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Full Name <span className="text-red-500">*</span></label>
               <input type="text" name="first_name" value={form.first_name} onChange={handleChange} required
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none text-sm transition-colors" placeholder="John" />
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none text-sm transition-colors" placeholder="John Doe" />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Last Name <span className="text-red-500">*</span></label>
-              <input type="text" name="last_name" value={form.last_name} onChange={handleChange} required
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none text-sm transition-colors" placeholder="Doe" />
-            </div>
-          </div>
+          )}
 
           {/* Mobile */}
           <div>

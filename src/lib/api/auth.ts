@@ -131,10 +131,11 @@ export const getCurrentUser = async (): Promise<CurrentUser> => {
     email: profile?.email || me?.email || '',
     role: profile?.role || decoded.role,
     is_active: me?.is_active ?? true,
-    // A missing profile (404, tolerated above) means this account — email or
-    // Google — has never finished registration; the caller should route to
-    // the profile-completion step.
-    needs_profile_completion: profile === null,
+    // No profile yet, or a student profile without its academic details
+    // (a first Google sign-in only seeds name + photo) → complete-profile.
+    needs_profile_completion:
+      profile === null ||
+      ((profile.role || decoded.role) === 'student' && (!profile.grade || !profile.school || !profile.district)),
     full_name: profile ? profile.name : undefined,
     auth_provider: me?.auth_provider,
     has_password: me?.has_password,
@@ -194,7 +195,7 @@ export const updateProfile = async (
       | 'nic_number'
       | 'selected_subjects'
     >
-  >
+  > & { referral_code?: string }
 ) => {
   const token = getStoredAccessToken()
   const decoded = token ? decodeAccessToken(token) : null
@@ -223,16 +224,24 @@ export const updateProfilePhoto = async (data: FormData): Promise<UserProfile> =
 // email-link forgot/reset-password flow still cannot be completed end-to-end.
 // set-password / change-password (both authenticated, JWT-scoped) are real.
 
-export const forgotPassword = async (_data: { email: string }): Promise<never> => {
-  throw new Error('Password reset is not supported by the Edura backend yet.')
+// Always succeeds with the same message, whether or not the email exists.
+export const forgotPassword = async (data: { email: string }): Promise<{ message: string }> => {
+  const response = await apiClient.post('/api/auth/forgot-password', { email: data.email.trim() })
+  return response.data
 }
 
-export const resetPassword = async (_data: {
+export const resetPassword = async (data: {
   token: string
   new_password: string
   confirm_password: string
-}): Promise<never> => {
-  throw new Error('Password reset is not supported by the Edura backend yet.')
+}): Promise<{ message: string }> => {
+  const response = await apiClient.post('/api/auth/reset-password', data)
+  return response.data
+}
+
+// Revokes the HttpOnly refresh cookie server-side; the client clears its own state.
+export const logoutSession = async (): Promise<void> => {
+  await apiClient.post('/api/auth/logout', null, { withCredentials: true })
 }
 
 // For a Google-only account (no password yet) — after this, the same email

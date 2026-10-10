@@ -140,8 +140,7 @@ export default function CourseList() {
 
   const isVideoSection = pathname.includes('video-courses')
   const sectionTitle = isVideoSection ? 'Video Courses' : 'Exam Courses'
-  // Edura doesn't split courses into "video" vs "exam" types — a course can
-  // hold both lessons and assessments — so both tabs show the same catalog.
+  const sectionType = isVideoSection ? 'video' : 'exam'
 
   // Filters
   const [search, setSearch] = useState('')
@@ -177,14 +176,19 @@ export default function CourseList() {
   // Unique subjects derived from courses — Edura courses don't carry a
   // subject field today, so this naturally stays empty and the Subject
   // filter section (conditionally rendered) just doesn't show.
+  const sectionCourses = useMemo(
+    () => courses.filter((c) => c.course_type === sectionType),
+    [courses, sectionType]
+  )
+
   const subjects = useMemo(
-    () => [...new Set(courses.map((c) => c.subject).filter(Boolean))].sort(),
-    [courses]
+    () => [...new Set(sectionCourses.map((c) => c.subject).filter(Boolean))].sort(),
+    [sectionCourses]
   )
 
   // Filter + sort
   const filtered = useMemo(() => {
-    let list = [...courses]
+    let list = [...sectionCourses]
     const q = search.trim().toLowerCase()
     if (q) list = list.filter((c) => c.title.toLowerCase().includes(q) || c.subject.toLowerCase().includes(q))
     if (selectedGrades.length) list = list.filter((c) => selectedGrades.includes(c.grade))
@@ -196,7 +200,7 @@ export default function CourseList() {
     if (sortOption === 'grade-asc') list.sort((a, b) => a.grade - b.grade)
     if (sortOption === 'grade-desc') list.sort((a, b) => b.grade - a.grade)
     return list
-  }, [courses, search, selectedGrades, selectedSubjects, priceFilter, sortOption])
+  }, [sectionCourses, search, selectedGrades, selectedSubjects, priceFilter, sortOption])
 
   const activeCount =
     selectedGrades.length +

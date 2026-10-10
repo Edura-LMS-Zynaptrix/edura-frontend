@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Download } from 'lucide-react'
-import { useParams, useRouter, useSearchParams } from 'next/navigation'
+import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation'
 import * as studentApi from '@/lib/api/student'
 import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
 import { startExam, submitExamAttempt, fetchLastAttempt, checkExamAccess } from '@/lib/redux/slices/examsSlice'
@@ -193,12 +193,13 @@ function SubmitConfirmDialog({ unanswered, onConfirm, onCancel, submitting }: Su
 function StudentExamPageContent() {
   const params = useParams()
   const router = useRouter()
+  const pathname = usePathname()
   const searchParams = useSearchParams()
   const examId = params?.examId as string
   const viewResults = searchParams?.get('view') === 'results'
   const dispatch = useAppDispatch()
 
-  const { user } = useAppSelector((state) => state.auth)
+  const { user, isAuthenticated, isInitialized } = useAppSelector((state) => state.auth)
   const { currentAttempt: examData, studentLoading: loading, studentError: error } = useAppSelector((state) => state.exams)
 
   // Phase control
@@ -322,11 +323,25 @@ function StudentExamPageContent() {
     }
   }
 
+  // ── Redirect to login if not authenticated ───────────────────────────────
+  // Every other protected page in the app has this guard; this page was
+  // missing it, so an anonymous visit went straight to checkExamAccess/
+  // startExam, got a 401 from assessment_service (which correctly requires
+  // auth), and surfaced as a confusing generic error instead of a login redirect.
+  useEffect(() => {
+    if (isInitialized && !isAuthenticated) {
+      const queryString = searchParams.toString()
+      const fullPath = queryString ? `${pathname}?${queryString}` : pathname
+      router.push(`/login?callbackUrl=${encodeURIComponent(fullPath)}`)
+    }
+  }, [isInitialized, isAuthenticated, router, pathname, searchParams])
+
   // ── Prefetch exam metadata for the modal ─────────────────────────────────
   const { currentCourseExams } = useAppSelector((state) => state.courses)
   useEffect(() => {
     setMounted(true)
     if (!examId) return
+    if (!isInitialized || !isAuthenticated) return
 
     // 1. Check if we're just viewing results
     if (viewResults) {
@@ -395,7 +410,7 @@ function StudentExamPageContent() {
     }
 
     initialCheck()
-  }, [examId, currentCourseExams]) 
+  }, [examId, currentCourseExams, isInitialized, isAuthenticated])
 
   // ── Start Exam (called after modal confirm) ──────────────────────────────
   const handleStartExam = useCallback(async () => {

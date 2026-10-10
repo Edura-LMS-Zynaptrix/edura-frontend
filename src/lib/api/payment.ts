@@ -368,7 +368,7 @@ export async function getEarningsAnalysis(courseId?: string): Promise<EarningsAn
   }
 }
 
-// Bank Account Management — no such concept exists in Edura.
+// Bank accounts (payment_service) — public active list, admin CRUD.
 export interface BankAccount {
   id: string
   bank_name: string
@@ -399,22 +399,28 @@ export interface BankAccountUpdate {
   order_number?: number
 }
 
+const mapBankAccount = (a: any): BankAccount => ({ ...a, id: String(a.id) })
+
 export async function getStudentBankAccounts(): Promise<BankAccount[]> {
-  return []
+  const response = await api.get('/api/payments/bank-accounts')
+  return response.data.map(mapBankAccount)
 }
 
 export async function getAdminBankAccounts(): Promise<BankAccount[]> {
-  return []
+  const response = await api.get('/api/payments/admin/bank-accounts')
+  return response.data.map(mapBankAccount)
 }
 
-export async function createBankAccount(_data: BankAccountCreate): Promise<BankAccount> {
-  throw new Error('Bank account management is not supported by the Edura backend.')
+export async function createBankAccount(data: BankAccountCreate): Promise<BankAccount> {
+  const response = await api.post('/api/payments/admin/bank-accounts', data)
+  return mapBankAccount(response.data)
 }
 
-export async function updateBankAccount(_id: string, _data: BankAccountUpdate): Promise<BankAccount> {
-  throw new Error('Bank account management is not supported by the Edura backend.')
+export async function updateBankAccount(id: string, data: BankAccountUpdate): Promise<BankAccount> {
+  const response = await api.patch(`/api/payments/admin/bank-accounts/${id}`, data)
+  return mapBankAccount(response.data)
 }
 
-export async function deleteBankAccount(_id: string): Promise<void> {
-  throw new Error('Bank account management is not supported by the Edura backend.')
+export async function deleteBankAccount(id: string): Promise<void> {
+  await api.delete(`/api/payments/admin/bank-accounts/${id}`)
 }
