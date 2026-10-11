@@ -1,10 +1,10 @@
 /**
  * Admin API Client
  *
- * Edura's admin_service and analytics_service are empty stubs today, and
- * assessment_service has no admin CRUD at all (only get/start/submit). Real
- * course + module + lesson management lives in course_service, file uploads
- * in content_service, users in user_service, payments in payment_service.
+ * Course + lesson management lives in course_service, exams and questions in
+ * assessment_service, file uploads in content_service, users in user_service,
+ * payments in payment_service, and the dashboard figures and analytics are
+ * composed by analytics_service.
  * Every export below keeps its original name/signature; those with a real
  * backing endpoint call it (with field translation), the rest return an
  * empty default or reject clearly — never a fabricated network call.
@@ -173,31 +173,8 @@ export interface MaterialUpdateData {
 // /stats, course_service's list count, and payment_service's receipts/payments) ─
 
 export const getAdminStats = async (): Promise<AdminStats> => {
-  const [coursesRes, paymentsRes, receiptsRes, userStatsRes] = await Promise.all([
-    apiClient.get('/api/courses/'),
-    paymentApi.getAllPayments().catch(() => []),
-    paymentApi.getPendingBankSlips().catch(() => []),
-    apiClient.get('/api/users/stats').catch(() => ({ data: { total_students: 0 } })),
-  ])
-  const successPayments = paymentsRes.filter((p) => p.status === 'success')
-  const now = new Date()
-  const revenueThisMonth = successPayments
-    .filter((p) => {
-      const d = new Date(p.created_at)
-      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
-    })
-    .reduce((sum, p) => sum + p.amount, 0)
-
-  return {
-    total_students: userStatsRes.data?.total_students ?? 0,
-    total_courses: coursesRes.data?.total ?? 0,
-    total_exams: 0, // no endpoint enumerates assessments across courses
-    total_exam_attempts: 0,
-    total_revenue: successPayments.reduce((sum, p) => sum + p.amount, 0),
-    revenue_this_month: revenueThisMonth,
-    pending_bank_slips: receiptsRes.length,
-    recent_activity: [],
-  }
+  const response = await apiClient.get('/api/analytics/admin/stats')
+  return response.data
 }
 
 // Students Management (real: user_service)
@@ -382,14 +359,14 @@ export const fetchStudentAttemptReview = async (_userId: string, attemptId: stri
   return mapAttemptReview(response.data)
 }
 
-// Analytics — analytics_service is an empty stub in Edura today.
+// Analytics
 
 export interface AnalyticsData {
   revenue_by_month: { year: number; month: number; revenue: number; count: number }[]
   students_by_grade: { grade: number; count: number }[]
   students_by_district: { district: string; count: number }[]
   attempts_by_month: { year: number; month: number; count: number }[]
-  top_exams: { exam_id: string; title: string; subject: string; grade: number; attempt_count: number; avg_score: number }[]
+  top_exams: { exam_id: string; title: string; subject: string; grade: number | null; attempt_count: number; avg_score: number }[]
   enrollments_by_subject: { subject: string; count: number }[]
 }
 
@@ -411,33 +388,10 @@ export interface CourseStruggleResponse {
   hardest_exams: StrugglePerformanceItem[]
 }
 
+// Composed by analytics_service from payment, assessment, user, enrollment and course data.
 export const getAdminAnalytics = async (): Promise<AnalyticsData> => {
-  // Grade/district distribution is real, computed from user_service's
-  // enriched student listing. Revenue/attempts/exam/subject breakdowns would
-  // need new aggregation endpoints in course_service/assessment_service/
-  // progress_service that don't exist yet — left empty rather than faked.
-  const response = await apiClient.get('/api/users/', { params: { role: 'student', page_size: 100 } })
-  const students = response.data.items as any[]
-
-  const gradeCounts = new Map<number, number>()
-  const districtCounts = new Map<string, number>()
-  for (const s of students) {
-    if (s.grade) gradeCounts.set(s.grade, (gradeCounts.get(s.grade) ?? 0) + 1)
-    if (s.district) districtCounts.set(s.district, (districtCounts.get(s.district) ?? 0) + 1)
-  }
-
-  return {
-    revenue_by_month: [],
-    students_by_grade: Array.from(gradeCounts.entries())
-      .sort((a, b) => a[0] - b[0])
-      .map(([grade, count]) => ({ grade, count })),
-    students_by_district: Array.from(districtCounts.entries())
-      .sort((a, b) => b[1] - a[1])
-      .map(([district, count]) => ({ district, count })),
-    attempts_by_month: [],
-    top_exams: [],
-    enrollments_by_subject: [],
-  }
+  const response = await apiClient.get('/api/analytics/admin/analytics')
+  return response.data
 }
 
 // First attempts only, so retakes don't hide where students struggle.

@@ -248,7 +248,7 @@ export default function AdminAnalyticsPage() {
                     <span className="text-lg font-bold text-gray-200 w-6 shrink-0">{i + 1}</span>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-gray-900 truncate">{exam.title}</p>
-                      <p className="text-xs text-gray-500">Grade {exam.grade} · {exam.subject}</p>
+                      <p className="text-xs text-gray-500">{exam.grade ? `Grade ${exam.grade} · ` : ''}{exam.subject}</p>
                     </div>
                     <div className="text-right shrink-0">
                       <p className="text-sm font-semibold text-gray-900">{exam.attempt_count} <span className="text-xs font-normal text-gray-400">attempts</span></p>
