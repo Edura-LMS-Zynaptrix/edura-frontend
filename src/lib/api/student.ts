@@ -800,7 +800,7 @@ function mapSubmitResponse(attemptId: string, examId: string, data: any): Submit
       course_title: '',
       subject: '',
       overall_rank: data.ranking?.overall_rank ?? null,
-      district_rank: null,
+      district_rank: data.ranking?.district_rank ?? null,
     },
   }
 }
