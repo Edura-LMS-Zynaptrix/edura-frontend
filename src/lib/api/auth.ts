@@ -16,6 +16,19 @@ export interface RegisterData {
   password: string
   confirm_password?: string
   role?: 'student' | 'teacher' | 'admin'
+  // The sign-up form's details, stored with the account so no login is needed to save them.
+  profile?: {
+    first_name: string
+    last_name?: string
+    mobile_no?: string
+    school?: string
+    district?: string
+    grade?: number
+    stream_id?: number
+    nic_number?: string
+    selected_subjects?: string[]
+    referral_code?: string
+  }
 }
 
 export interface TokenResponse {
@@ -98,7 +111,20 @@ export const register = async (data: RegisterData) => {
     email: data.email,
     password: data.password,
     role: data.role ?? 'student',
+    profile: data.profile,
   })
+  return response.data
+}
+
+// The link in the verification email lands on /verify-email?token=…
+export const verifyEmail = async (token: string): Promise<{ message: string }> => {
+  const response = await apiClient.post('/api/auth/verify-email', { token })
+  return response.data
+}
+
+// Same answer for every address; a new email is only sent if the account is waiting to be verified.
+export const resendVerification = async (email: string): Promise<{ message: string }> => {
+  const response = await apiClient.post('/api/auth/resend-verification', { email })
   return response.data
 }
 

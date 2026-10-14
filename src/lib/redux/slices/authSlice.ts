@@ -35,6 +35,8 @@ interface AuthState {
   isLoading: boolean
   error: string | null
   needsProfileCompletion: boolean
+  // Set when a login is refused because the email hasn't been verified yet.
+  unverifiedEmail: string | null
 }
 
 const initialState: AuthState = {
@@ -46,6 +48,7 @@ const initialState: AuthState = {
   isLoading: false,
   error: null,
   needsProfileCompletion: false,
+  unverifiedEmail: null,
 }
 
 // Helper to manage storage consistently
@@ -63,12 +66,15 @@ const syncTokensToStorage = (tokens: { access_token: string; refresh_token: stri
 // Async thunks
 export const login = createAsyncThunk(
   'auth/login',
-  async (credentials: { email: string; password: string; remember_me?: boolean }, { rejectWithValue }) => {
+  async (credentials: { email: string; password: string; remember_me?: boolean }, { rejectWithValue, dispatch }) => {
     try {
       const response = await apiLogin(credentials)
       syncTokensToStorage(response, !!credentials.remember_me)
       return response
     } catch (error: any) {
+      if (error?.response?.data?.detail?.error === 'EMAIL_NOT_VERIFIED') {
+        dispatch(setUnverifiedEmail(credentials.email))
+      }
       return rejectWithValue(getErrorMessage(error))
     }
   }
@@ -224,6 +230,9 @@ const authSlice = createSlice({
     clearNeedsProfileCompletion: (state) => {
       state.needsProfileCompletion = false
     },
+    setUnverifiedEmail: (state, action: PayloadAction<string | null>) => {
+      state.unverifiedEmail = action.payload
+    },
     // Called immediately on startup when tokens exist in storage,
     // before the /auth/me network call completes — eliminates reload flash.
     setAuthenticatedFromStorage: (state) => {
@@ -241,6 +250,7 @@ const authSlice = createSlice({
       .addCase(login.pending, (state) => {
         state.isLoading = true
         state.error = null
+        state.unverifiedEmail = null
       })
       .addCase(login.fulfilled, (state, action) => {
         state.isLoading = false
@@ -370,5 +380,5 @@ const authSlice = createSlice({
   },
 })
 
-export const { logout, setCredentials, clearNeedsProfileCompletion, setAuthenticatedFromStorage, setInitialized } = authSlice.actions
+export const { logout, setCredentials, clearNeedsProfileCompletion, setAuthenticatedFromStorage, setInitialized, setUnverifiedEmail } = authSlice.actions
 export default authSlice.reducer
