@@ -6,12 +6,15 @@ import Link from 'next/link'
 import { useGoogleLogin } from '@react-oauth/google'
 import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
 import { login, fetchCurrentUser, googleLoginThunk } from '@/lib/redux/slices/authSlice'
+import { resendVerification } from '@/lib/api/auth'
 
 function LoginPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const dispatch = useAppDispatch()
-  const { isAuthenticated, isLoading, error, user, needsProfileCompletion } = useAppSelector((state) => state.auth)
+  const { isAuthenticated, isLoading, error, user, needsProfileCompletion, unverifiedEmail } = useAppSelector((state) => state.auth)
+  const [resendNote, setResendNote] = useState('')
+  const [resending, setResending] = useState(false)
 
   const [formData, setFormData] = useState({
     email: '',
@@ -106,9 +109,39 @@ function LoginPageContent() {
             <p className="text-gray-600 text-sm">Sign in to access your dashboard and continue optimizing your learning process.</p>
           </div>
 
-          {error && (
+          {error && !unverifiedEmail && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6 text-sm">
               {error}
+            </div>
+          )}
+
+          {unverifiedEmail && (
+            <div className="bg-amber-50 border border-amber-200 text-amber-900 px-4 py-3 rounded-lg mb-6 text-sm">
+              <p className="font-semibold mb-1">Please verify your email first</p>
+              <p>
+                We sent a verification link to <span className="font-medium">{unverifiedEmail}</span> when you
+                registered. Click it, then sign in again.
+              </p>
+              <button
+                type="button"
+                disabled={resending}
+                onClick={async () => {
+                  setResending(true)
+                  setResendNote('')
+                  try {
+                    const res = await resendVerification(unverifiedEmail)
+                    setResendNote(res.message)
+                  } catch {
+                    setResendNote('We could not send the email. Please try again in a moment.')
+                  } finally {
+                    setResending(false)
+                  }
+                }}
+                className="mt-2 text-teal-700 font-medium hover:underline disabled:opacity-50"
+              >
+                {resending ? 'Sending…' : 'Resend verification email'}
+              </button>
+              {resendNote && <p className="mt-2 text-xs text-amber-800">{resendNote}</p>}
             </div>
           )}
 

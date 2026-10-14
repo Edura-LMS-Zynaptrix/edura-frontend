@@ -5,8 +5,8 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useGoogleLogin } from '@react-oauth/google'
 import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
-import { register, login, createProfile, logout, googleLoginThunk, fetchCurrentUser } from '@/lib/redux/slices/authSlice'
-import { logoutSession } from '@/lib/api/auth'
+import { register, googleLoginThunk, fetchCurrentUser } from '@/lib/redux/slices/authSlice'
+import { resendVerification } from '@/lib/api/auth'
 import { fetchPublicStreams } from '@/lib/redux/slices/adminSlice'
 import { getSubjects } from '@/lib/api/student'
 
@@ -44,6 +44,16 @@ function RegisterPageContent() {
   const [availableSubjects, setAvailableSubjects] = useState<string[]>([])
 
   const [success, setSuccess] = useState(false)
+  // After sign-up the person must follow the emailed link before they can log in.
+  const [registeredEmail, setRegisteredEmail] = useState('')
+  const [resendWait, setResendWait] = useState(0)
+  const [resendNote, setResendNote] = useState('')
+
+  useEffect(() => {
+    if (resendWait <= 0) return
+    const timer = setTimeout(() => setResendWait(resendWait - 1), 1000)
+    return () => clearTimeout(timer)
+  }, [resendWait])
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [touched, setTouched] = useState({
@@ -125,7 +135,7 @@ function RegisterPageContent() {
   const isPasswordValid = strengthScore === 5
   const doPasswordsMatch = formData.password === formData.confirm_password && formData.password.length > 0
   const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)
-  const isPhoneValid = /^\d{10}$/.test(formData.phone_number.replace(/[\s\-\(\)]/g, ''))
+  const isPhoneValid = /^\d{10}$/.test(formData.phone_number.replace(/[\s()-]/g, ''))
   const isDistrictValid = formData.district.trim().length >= 2
   const isNICValid = formData.grade < 12 || /^([0-9]{9}[vVxX]|[0-9]{12})$/.test(formData.nic_number)
   const isFormValid = isEmailValid && isPasswordValid && doPasswordsMatch && isPhoneValid && isDistrictValid && isNICValid && formData.selected_subjects.length > 0 && formData.full_name.trim().length >= 2 && formData.school.trim().length >= 2
@@ -137,31 +147,30 @@ function RegisterPageContent() {
     const [firstName, ...otherNames] = formData.full_name.trim().split(/\s+/)
 
     try {
-      // auth_service owns the credentials and user_service owns the profile:
-      // create the login, sign in for a token, then create the profile.
-      await dispatch(register({ email, password: formData.password, role: 'student' })).unwrap()
-      await dispatch(login({ email, password: formData.password, remember_me: false })).unwrap()
+      // The account and its profile are created together by the server; the
+      // person then confirms their email address before they can sign in.
       await dispatch(
-        createProfile({
-          first_name: firstName,
-          last_name: otherNames.join(' '),
-          mobile_no: formData.phone_number.replace(/[\s\-\(\)]/g, ''),
-          school: formData.school.trim(),
-          district: formData.district,
-          grade: formData.grade,
-          stream_id: formData.grade >= 12 && formData.stream_id ? Number(formData.stream_id) : undefined,
-          nic_number: formData.grade >= 12 ? formData.nic_number.trim() : undefined,
-          selected_subjects: formData.selected_subjects,
-          referral_code: formData.referral_code.trim() || undefined,
+        register({
+          email,
+          password: formData.password,
+          role: 'student',
+          profile: {
+            first_name: firstName,
+            last_name: otherNames.join(' '),
+            mobile_no: formData.phone_number.replace(/[\s()-]/g, ''),
+            school: formData.school.trim(),
+            district: formData.district,
+            grade: formData.grade,
+            stream_id: formData.grade >= 12 && formData.stream_id ? Number(formData.stream_id) : undefined,
+            nic_number: formData.grade >= 12 ? formData.nic_number.trim() : undefined,
+            selected_subjects: formData.selected_subjects,
+            referral_code: formData.referral_code.trim() || undefined,
+          },
         })
       ).unwrap()
-      // Registration ends signed out at the login page, as in the reference flow.
-      await logoutSession().catch(() => {})
-      dispatch(logout())
+      setRegisteredEmail(email)
+      setResendWait(60)
       setSuccess(true)
-      setTimeout(() => {
-        router.push('/login')
-      }, 3000)
     } catch (err) {
       console.error('Registration failed:', err)
     }
@@ -186,26 +195,52 @@ function RegisterPageContent() {
     flow: 'implicit',
   })
 
+  const handleResend = async () => {
+    setResendNote('')
+    try {
+      await resendVerification(registeredEmail)
+      setResendNote('A new verification email is on its way.')
+    } catch {
+      setResendNote('We could not send the email. Please try again in a moment.')
+    }
+    setResendWait(60)
+  }
+
   if (success) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-8">
         <div className="bg-white rounded-lg shadow-lg p-12 max-w-md w-full text-center">
-          <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center text-4xl mx-auto mb-6">
-            ✓
+          <div className="w-20 h-20 bg-teal-100 rounded-full flex items-center justify-center text-4xl mx-auto mb-6">
+            📬
           </div>
           <h2 className="text-3xl font-bold text-gray-900 mb-3">
-            Welcome Aboard!
+            Check your email
           </h2>
-          <p className="text-gray-600 mb-8">
-            Your account has been created successfully. Please complete payment to unlock all features.
+          <p className="text-gray-600 mb-2">
+            We sent a verification link to
           </p>
-          <div className="flex items-center justify-center gap-3 text-teal-700 bg-teal-50 rounded-lg py-3 px-6">
-            <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            <span className="font-medium">Redirecting to login...</span>
-          </div>
+          <p className="text-teal-700 font-semibold mb-4 break-all">{registeredEmail}</p>
+          <p className="text-gray-600 text-sm mb-6">
+            Click the link in that email to confirm your address, then sign in. The link works for 24 hours.
+          </p>
+          <Link
+            href="/login"
+            className="block w-full py-3 bg-teal-600 hover:bg-teal-700 text-white font-semibold rounded-xl transition-colors mb-4"
+          >
+            Go to login
+          </Link>
+          <p className="text-gray-500 text-xs">
+            Didn&apos;t get it? Check your spam folder, or{' '}
+            <button
+              type="button"
+              onClick={handleResend}
+              disabled={resendWait > 0}
+              className="text-teal-600 font-medium hover:underline disabled:text-gray-400 disabled:no-underline"
+            >
+              {resendWait > 0 ? `resend in ${resendWait}s` : 'resend the email'}
+            </button>
+          </p>
+          {resendNote && <p className="text-xs text-gray-600 mt-2">{resendNote}</p>}
         </div>
       </div>
     )
