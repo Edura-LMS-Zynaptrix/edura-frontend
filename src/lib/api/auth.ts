@@ -135,14 +135,19 @@ export const getCurrentUser = async (): Promise<CurrentUser> => {
   const decoded = token ? decodeAccessToken(token) : null
   if (!decoded) throw new Error('No active session')
 
+  // A new account's profile is built by user_service when it hears about the
+  // sign-up, a moment after the token is issued. Look again briefly on 404
+  // before deciding the person has none.
   let profile: UserProfile | null = null
-  try {
-    const response = await apiClient.get(`/api/users/${decoded.sub}`)
-    profile = response.data
-  } catch {
-    // user_service has no endpoint to create a profile on registration, so a
-    // freshly-registered user legitimately has none yet — not fatal.
-    profile = null
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      const response = await apiClient.get(`/api/users/${decoded.sub}`)
+      profile = response.data
+      break
+    } catch (err: any) {
+      if (err?.response?.status !== 404) break
+      await new Promise((resolve) => setTimeout(resolve, 400))
+    }
   }
 
   let me: MeResponse | null = null
