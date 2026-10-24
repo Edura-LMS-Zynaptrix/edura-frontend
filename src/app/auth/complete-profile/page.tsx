@@ -157,7 +157,17 @@ function CompleteProfilePageContent() {
           updateProfile(hasName ? details : { ...details, ...splitName(form.first_name) })
         ).unwrap()
       } else {
-        await dispatch(createProfile({ ...details, ...splitName(form.first_name) })).unwrap()
+        try {
+          await dispatch(createProfile({ ...details, ...splitName(form.first_name) })).unwrap()
+        } catch (err: any) {
+          // The profile appeared while this form was open (it is created from the
+          // sign-up event): fill in the details on it instead.
+          if (typeof err === 'string' && /already exists/i.test(err)) {
+            await dispatch(updateProfile({ ...details, ...splitName(form.first_name) })).unwrap()
+          } else {
+            throw err
+          }
+        }
       }
       await dispatch(fetchCurrentUser())
       router.push('/')
