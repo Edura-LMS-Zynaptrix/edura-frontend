@@ -1,60 +1,82 @@
-'use client'
+'use client';
 
-import React, { useRef, useState } from 'react'
-import Link from 'next/link'
-import * as LucideIcons from 'lucide-react'
-import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
-import { getInitials } from '@/lib/utils/initials'
-import { updateProfilePhoto, fetchCurrentUser } from '@/lib/redux/slices/authSlice'
+import React, { useRef, useState } from 'react';
+import Link from 'next/link';
+import * as LucideIcons from 'lucide-react';
+import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks';
+import { getInitials } from '@/lib/utils/initials';
+import {
+  updateProfilePhoto,
+  fetchCurrentUser,
+} from '@/lib/redux/slices/authSlice';
 
 interface SidebarProps {
-  enrollments: any
+  enrollments: any;
 }
 
 const DashboardSidebar: React.FC<SidebarProps> = ({ enrollments }) => {
-  const dispatch = useAppDispatch()
-  const { user } = useAppSelector((state) => state.auth)
-  const [uploadingPhoto, setUploadingPhoto] = useState(false)
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const dispatch = useAppDispatch();
+  const { user } = useAppSelector((state) => state.auth);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const initials = getInitials(user?.profile?.full_name, user?.email)
+  const initials = getInitials(user?.profile?.full_name, user?.email);
 
   const navLinks = [
-    { icon: LucideIcons.LayoutDashboard, label: 'Dashboard', href: '/dashboard' },
-    { icon: LucideIcons.BookOpen, label: 'My Courses', href: '/student/my-courses' },
-    { icon: LucideIcons.FileText, label: 'My Analytics', href: '/student/my-results' },
-    { icon: LucideIcons.Trophy, label: 'My Rankings', href: '/student/rankings' },
+    {
+      icon: LucideIcons.LayoutDashboard,
+      label: 'Dashboard',
+      href: '/dashboard',
+    },
+    {
+      icon: LucideIcons.BookOpen,
+      label: 'My Courses',
+      href: '/student/my-courses',
+    },
+    {
+      icon: LucideIcons.FileText,
+      label: 'My Analytics',
+      href: '/student/my-results',
+    },
+    {
+      icon: LucideIcons.Trophy,
+      label: 'My Rankings',
+      href: '/student/rankings',
+    },
     { icon: LucideIcons.Settings, label: 'Settings', href: '/profile' },
-  ]
+  ];
 
   const handlePhotoClick = () => {
-    if (fileInputRef.current) fileInputRef.current.click()
-  }
+    if (fileInputRef.current) fileInputRef.current.click();
+  };
 
   const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setUploadingPhoto(true)
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingPhoto(true);
     try {
-      const formData = new FormData()
-      formData.append('file', file)
-      const resAction = await dispatch(updateProfilePhoto(formData))
+      const formData = new FormData();
+      formData.append('file', file);
+      const resAction = await dispatch(updateProfilePhoto(formData));
       if (updateProfilePhoto.fulfilled.match(resAction)) {
-        await dispatch(fetchCurrentUser())
+        await dispatch(fetchCurrentUser());
       }
     } catch (err) {
-      console.error('Photo upload failed:', err)
+      console.error('Photo upload failed:', err);
     } finally {
-      setUploadingPhoto(false)
+      setUploadingPhoto(false);
     }
-  }
+  };
 
   return (
     <div className="flex flex-col gap-6">
       {/* Profile Section */}
       <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
         <div className="flex flex-col items-center text-center">
-          <div className="relative group cursor-pointer mb-4" onClick={handlePhotoClick}>
+          <div
+            className="relative group cursor-pointer mb-4"
+            onClick={handlePhotoClick}
+          >
             {user?.profile?.profile_photo_url ? (
               <img
                 src={user.profile.profile_photo_url}
@@ -71,7 +93,10 @@ const DashboardSidebar: React.FC<SidebarProps> = ({ enrollments }) => {
             </div>
             {uploadingPhoto && (
               <div className="absolute inset-0 bg-white/60 rounded-full flex items-center justify-center">
-                <LucideIcons.Loader2 size={24} className="text-teal-600 animate-spin" />
+                <LucideIcons.Loader2
+                  size={24}
+                  className="text-teal-600 animate-spin"
+                />
               </div>
             )}
             <input
@@ -85,8 +110,10 @@ const DashboardSidebar: React.FC<SidebarProps> = ({ enrollments }) => {
           <h2 className="text-xl font-bold text-gray-900 truncate w-full">
             {user?.profile?.full_name || user?.email}
           </h2>
-          <p className="text-sm text-gray-500 mb-4 font-medium">Grade {user?.profile?.grade} • {user?.profile?.district}</p>
-          <Link 
+          <p className="text-sm text-gray-500 mb-4 font-medium">
+            Grade {user?.profile?.grade} • {user?.profile?.district}
+          </p>
+          <Link
             href="/profile"
             className="w-full text-[12px] font-black uppercase tracking-[0.1em] text-[#00897B] hover:text-white bg-[#E0F2F1] hover:bg-[#00897B] py-3 rounded-full transition-all active:scale-[0.97] border border-[#B2DFDB] flex items-center justify-center"
           >
@@ -98,17 +125,20 @@ const DashboardSidebar: React.FC<SidebarProps> = ({ enrollments }) => {
       {/* Navigation Links */}
       <nav className="space-y-1">
         {navLinks.map((link) => {
-          const Icon = link.icon
+          const Icon = link.icon;
           return (
             <Link
               key={link.href}
               href={link.href}
               className="flex items-center gap-3 px-4 py-3 text-sm font-bold text-gray-700 hover:bg-gray-100 rounded-xl transition-all group active:scale-[0.98]"
             >
-              <Icon size={18} className="text-gray-400 group-hover:text-teal-600 transition-colors" />
+              <Icon
+                size={18}
+                className="text-gray-400 group-hover:text-teal-600 transition-colors"
+              />
               {link.label}
             </Link>
-          )
+          );
         })}
       </nav>
 
@@ -129,12 +159,14 @@ const DashboardSidebar: React.FC<SidebarProps> = ({ enrollments }) => {
             </Link>
           ))}
           {(!enrollments?.courses || enrollments.courses.length === 0) && (
-            <p className="px-4 text-xs text-gray-400 italic">No collections found</p>
+            <p className="px-4 text-xs text-gray-400 italic">
+              No collections found
+            </p>
           )}
         </div>
       </div>
     </div>
-  )
-}
+  );
+};
 
-export default DashboardSidebar
+export default DashboardSidebar;

@@ -10,7 +10,7 @@
 export type MockClient = Record<
   'get' | 'post' | 'put' | 'patch' | 'delete',
   jest.Mock
->
+>;
 
 export function clientMock() {
   return {
@@ -22,11 +22,11 @@ export function clientMock() {
       patch: jest.fn(),
       delete: jest.fn(),
     },
-  }
+  };
 }
 
 /** A resolved axios-style response. */
-export const reply = (data: unknown) => Promise.resolve({ data })
+export const reply = (data: unknown) => Promise.resolve({ data });
 
 /** A rejected axios-style error with an HTTP status and body. */
 export const httpError = (status: number, data: unknown = {}) =>
@@ -34,11 +34,11 @@ export const httpError = (status: number, data: unknown = {}) =>
     Object.assign(new Error(`Request failed with status code ${status}`), {
       response: { status, data },
     })
-  )
+  );
 
 /** An unsigned JWT with the given claims (enough for client-side decoding). */
 export function fakeJwt(claims: Record<string, unknown>): string {
   const b64 = (o: unknown) =>
-    Buffer.from(JSON.stringify(o)).toString('base64url')
-  return `${b64({ alg: 'HS256', typ: 'JWT' })}.${b64(claims)}.signature`
+    Buffer.from(JSON.stringify(o)).toString('base64url');
+  return `${b64({ alg: 'HS256', typ: 'JWT' })}.${b64(claims)}.signature`;
 }
