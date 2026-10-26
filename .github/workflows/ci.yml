@@ -68,4 +68,6 @@ jobs:
           node-version: '20'
           cache: 'npm'
       - run: npm ci
-      - run: npm audit --audit-level=high
+      # Fails on any high/critical advisory except the accepted risks listed in
+      # audit-ci.jsonc (documented in ADR-14).
+      - run: npx --yes audit-ci@7.1.0 --config audit-ci.jsonc
