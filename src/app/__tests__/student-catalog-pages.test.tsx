@@ -291,19 +291,14 @@ describe('CourseList', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  // Bug: CourseList returns before its hooks run, so finishing the profile
-  // while the list is mounted changes the hook count and React throws.
-  test.failing(
-    'keeps working when profile completion finishes while mounted',
-    async () => {
-      const store = makeStore({ auth: { needsProfileCompletion: true } });
-      renderWithStore(<CourseList />, { store });
-      act(() => {
-        store.dispatch(clearNeedsProfileCompletion());
-      });
-      expect(await screen.findByText('Algebra Papers')).toBeInTheDocument();
-    }
-  );
+  it('keeps working when profile completion finishes while mounted', async () => {
+    const store = makeStore({ auth: { needsProfileCompletion: true } });
+    renderWithStore(<CourseList />, { store });
+    act(() => {
+      store.dispatch(clearNeedsProfileCompletion());
+    });
+    expect(await screen.findByText('Algebra Papers')).toBeInTheDocument();
+  });
 
   describe('class packages', () => {
     it('does not look up packages for visitors', async () => {

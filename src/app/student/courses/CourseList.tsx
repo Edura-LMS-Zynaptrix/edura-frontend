@@ -175,8 +175,6 @@ export default function CourseList() {
     (state) => state.auth
   );
 
-  if (needsProfileCompletion) return null;
-
   const isVideoSection = pathname.includes('video-courses');
   const sectionTitle = isVideoSection ? 'Video Courses' : 'Exam Courses';
   const sectionType = isVideoSection ? 'video' : 'exam';
@@ -314,6 +312,8 @@ export default function CourseList() {
 
   const enrolledPkgs = classPackages.filter((p) => p.is_enrolled);
   const unenrolledPkgs = classPackages.filter((p) => !p.is_enrolled);
+
+  if (needsProfileCompletion) return null;
 
   return (
     <div className="min-h-screen bg-gray-50">

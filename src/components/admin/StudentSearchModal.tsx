@@ -136,7 +136,7 @@ export default function StudentSearchModal({
             <div className="flex flex-col items-center justify-center h-full py-20 text-gray-400 gap-3">
               <User className="w-12 h-12 opacity-20" />
               <p className="text-sm font-medium">
-                No students found matching "{searchTerm}"
+                No students found matching &quot;{searchTerm}&quot;
               </p>
             </div>
           ) : (

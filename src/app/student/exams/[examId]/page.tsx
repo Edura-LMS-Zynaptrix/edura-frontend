@@ -192,7 +192,7 @@ function StartConfirmModal({
               disabled={starting}
               className="flex-1 py-2.5 border border-gray-200 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 transition-colors text-sm disabled:opacity-50"
             >
-              I'll do it later
+              I&apos;ll do it later
             </button>
             <button
               onClick={onConfirm}

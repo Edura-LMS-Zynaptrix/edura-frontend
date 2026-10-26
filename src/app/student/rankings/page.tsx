@@ -70,8 +70,6 @@ function RankingsContent() {
   } = useAppSelector((state) => state.studentDashboard);
   const { needsProfileCompletion } = useAppSelector((state) => state.auth);
 
-  if (needsProfileCompletion) return null;
-
   const [activeExamId, setActiveExamId] = useState<string>('');
   const [selectedGroup, setSelectedGroup] = useState('');
   const [district, setDistrict] = useState('');
@@ -147,6 +145,8 @@ function RankingsContent() {
   };
 
   const activeExamDetails = exams.find((e) => e.exam_id === activeExamId);
+
+  if (needsProfileCompletion) return null;
 
   if (loading) {
     return (

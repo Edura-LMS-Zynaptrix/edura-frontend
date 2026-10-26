@@ -84,8 +84,6 @@ export default function VideoClassPlayerPage() {
     needsProfileCompletion,
   } = useAppSelector((state) => state.auth);
 
-  if (needsProfileCompletion) return null;
-
   // Data State
   const [course, setCourse] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -180,7 +178,9 @@ export default function VideoClassPlayerPage() {
       // Player ref is stale — destroy it
       try {
         playerRef.current.destroy();
-      } catch (_) {}
+      } catch (_) {
+        /* player may already be destroyed */
+      }
       playerRef.current = null;
     }
 
@@ -346,11 +346,20 @@ export default function VideoClassPlayerPage() {
 
   // 2. Hydrate session & Data Loading
   useEffect(() => {
+    // The page renders nothing until the profile is complete, so don't load yet.
+    if (needsProfileCompletion) return;
     if (isAuthenticated && !user && !authLoading) {
       dispatch(fetchCurrentUser());
     }
     if (courseId) loadCourseData();
-  }, [isAuthenticated, user, authLoading, courseId, dispatch]);
+  }, [
+    isAuthenticated,
+    user,
+    authLoading,
+    courseId,
+    dispatch,
+    needsProfileCompletion,
+  ]);
 
   const loadCourseData = async () => {
     try {
@@ -518,6 +527,8 @@ export default function VideoClassPlayerPage() {
 
   const totalSeconds = currentVideo?.duration_seconds || duration || 0;
   const displayTime = currentTime > totalSeconds ? totalSeconds : currentTime;
+
+  if (needsProfileCompletion) return null;
 
   if (authLoading || loading)
     return (
@@ -825,6 +836,7 @@ export default function VideoClassPlayerPage() {
                             key={mat.id}
                             href={mat.file_url}
                             target="_blank"
+                            rel="noopener noreferrer"
                             className="flex items-center gap-4 p-4 bg-slate-900/50 border border-slate-800 hover:border-teal-500/50 hover:bg-slate-800 rounded-2xl transition-all group"
                           >
                             <div className="w-10 h-10 flex items-center justify-center bg-teal-500/10 text-teal-500 rounded-xl group-hover:scale-110 transition-all">
@@ -944,6 +956,7 @@ export default function VideoClassPlayerPage() {
                                             key={mat.id}
                                             href={mat.file_url}
                                             target="_blank"
+                                            rel="noopener noreferrer"
                                             onClick={(e) => e.stopPropagation()}
                                             className="flex items-center gap-2 text-[10px] text-slate-500 hover:text-teal-500 py-0.5 transition-colors group/mat"
                                           >

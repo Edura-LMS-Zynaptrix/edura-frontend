@@ -887,7 +887,7 @@ describe('Exam questions', () => {
     admin.getQuestions.mockResolvedValue(
       questions.map((q) => ({
         ...q,
-        options: q.options.map((o) => ({ ...o })),
+        options: q.options.map((o: Record<string, unknown>) => ({ ...o })),
       })) as any
     );
   });

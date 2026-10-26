@@ -388,7 +388,7 @@ function LoginPageContent() {
           </div>
 
           <p className="text-center text-sm text-gray-600 mt-8">
-            Don't have an Account?{' '}
+            Don&apos;t have an Account?{' '}
             <Link
               href="/register"
               className="font-medium text-teal-600 hover:text-teal-700"

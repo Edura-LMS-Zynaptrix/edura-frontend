@@ -622,7 +622,7 @@ export default function ModuleContentPage() {
 
         {videos.length === 0 ? (
           <div className="bg-white border border-dashed border-gray-300 rounded-xl py-12 text-center text-gray-500">
-            No videos added yet. Click "+ Add Video" to get started.
+            No videos added yet. Click &quot;+ Add Video&quot; to get started.
           </div>
         ) : (
           [...videos]

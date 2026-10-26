@@ -552,7 +552,7 @@ export default function SubjectsAndStreamsPage() {
                         </div>
                         {stream.description && (
                           <p className="text-xs text-gray-500 italic mb-3 line-clamp-2">
-                            "{stream.description}"
+                            &quot;{stream.description}&quot;
                           </p>
                         )}
                         <div className="flex flex-wrap gap-1.5">
@@ -591,7 +591,8 @@ export default function SubjectsAndStreamsPage() {
         {activeTab === 'subjects' && (
           <p className="text-xs text-gray-400 italic">
             Tip: The same subject name can exist on multiple grades (e.g. ICT
-            for Grades 10–13). Deleting a subject won't affect existing courses.
+            for Grades 10–13). Deleting a subject won&apos;t affect existing
+            courses.
           </p>
         )}
       </main>

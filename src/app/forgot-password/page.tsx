@@ -49,11 +49,11 @@ export default function ForgotPasswordPage() {
               <p className="text-gray-300 text-sm leading-relaxed">
                 If an account with{' '}
                 <span className="text-teal-300 font-medium">{email}</span>{' '}
-                exists, we've sent a password reset link. It will expire in{' '}
+                exists, we&apos;ve sent a password reset link. It will expire in{' '}
                 <strong>1 hour</strong>.
               </p>
               <p className="text-gray-400 text-xs">
-                Didn't receive it? Check your spam folder or{' '}
+                Didn&apos;t receive it? Check your spam folder or{' '}
                 <button
                   onClick={() => setSubmitted(false)}
                   className="text-teal-400 hover:underline"
@@ -77,7 +77,7 @@ export default function ForgotPasswordPage() {
                   Forgot your password?
                 </h2>
                 <p className="text-gray-400 text-sm mt-1">
-                  Enter your email and we'll send a reset link.
+                  Enter your email and we&apos;ll send a reset link.
                 </p>
               </div>
 

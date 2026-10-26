@@ -348,13 +348,11 @@ describe('Attempt review page', () => {
       ...review,
       ranking: { exam_title: title, subject: 'X' },
     });
-    jest
-      .mocked(html2canvas)
-      .mockResolvedValue({
-        width: 100,
-        height: 10,
-        toDataURL: () => 'img',
-      } as any);
+    jest.mocked(html2canvas).mockResolvedValue({
+      width: 100,
+      height: 10,
+      toDataURL: () => 'img',
+    } as any);
     renderWithStore(<AttemptReviewPage />);
     await userEvent.click(
       await screen.findByRole('button', { name: /Download PDF/ })
@@ -532,18 +530,14 @@ describe('Rankings page', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  // Bug: like CourseList, RankingsContent returns before its hooks run.
-  test.failing(
-    'keeps working when profile completion finishes while mounted',
-    async () => {
-      const store = makeStore({ auth: { needsProfileCompletion: true } });
-      renderWithStore(<RankingsPage />, { store });
-      act(() => {
-        store.dispatch(clearNeedsProfileCompletion());
-      });
-      expect(await screen.findByText('No rankings yet')).toBeInTheDocument();
-    }
-  );
+  it('keeps working when profile completion finishes while mounted', async () => {
+    const store = makeStore({ auth: { needsProfileCompletion: true } });
+    renderWithStore(<RankingsPage />, { store });
+    act(() => {
+      store.dispatch(clearNeedsProfileCompletion());
+    });
+    expect(await screen.findByText('No rankings yet')).toBeInTheDocument();
+  });
 
   // Bug: examRank is never cleared, so after switching exams the banner keeps
   // the previous exam's rank under the new exam's title until (unless) the

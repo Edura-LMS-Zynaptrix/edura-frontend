@@ -25,7 +25,7 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({
             ! 👋
           </h1>
           <p className="text-teal-50 font-medium">
-            You're doing great! Keep up the good work and ace those exams.
+            You&apos;re doing great! Keep up the good work and ace those exams.
           </p>
         </div>
         <div className="absolute top-0 right-0 p-8 opacity-10 flex gap-4 rotate-12 translate-x-12 -translate-y-4">

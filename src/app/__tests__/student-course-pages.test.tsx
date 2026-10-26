@@ -521,21 +521,17 @@ describe('Course overview page', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  // Bug: returns before its hooks run (same as CourseList and Rankings).
-  test.failing(
-    'keeps working when profile completion finishes while mounted',
-    async () => {
-      student.getCourseOverview.mockResolvedValue(examCourse() as any);
-      const store = makeStore({ auth: { needsProfileCompletion: true } });
-      renderWithStore(<CourseOverviewPage />, { store });
-      act(() => {
-        store.dispatch(clearNeedsProfileCompletion());
-      });
-      expect(
-        await screen.findByRole('heading', { name: 'Physics Papers' })
-      ).toBeInTheDocument();
-    }
-  );
+  it('keeps working when profile completion finishes while mounted', async () => {
+    student.getCourseOverview.mockResolvedValue(examCourse() as any);
+    const store = makeStore({ auth: { needsProfileCompletion: true } });
+    renderWithStore(<CourseOverviewPage />, { store });
+    act(() => {
+      store.dispatch(clearNeedsProfileCompletion());
+    });
+    expect(
+      await screen.findByRole('heading', { name: 'Physics Papers' })
+    ).toBeInTheDocument();
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -652,7 +652,8 @@ export default function AdminBankAccountsPage() {
                   </div>
                   <p className="text-xs text-gray-500 leading-relaxed max-w-xs mx-auto lg:mx-0">
                     Active bank accounts appear instantly on student payment
-                    pages. Use "Order Priority" to sort which ones show first.
+                    pages. Use &quot;Order Priority&quot; to sort which ones
+                    show first.
                   </p>
                 </div>
               </div>

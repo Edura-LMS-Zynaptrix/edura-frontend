@@ -164,7 +164,7 @@ function CompleteProfilePageContent() {
   };
 
   const isMobileValid = /^\d{10}$/.test(
-    form.mobile_no.replace(/[\s\-\(\)]/g, '')
+    form.mobile_no.replace(/[\s\-()]/g, '')
   );
   const isDistrictValid = form.district.trim().length >= 2;
   const isNICValid =

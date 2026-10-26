@@ -772,13 +772,11 @@ describe('Results PDF', () => {
   it('captures the summary and each review item into the PDF', async () => {
     nav.setSearch({ view: 'results' });
     student.getLastAttempt.mockResolvedValue(submitted() as any);
-    jest
-      .mocked(html2canvas)
-      .mockResolvedValue({
-        width: 100,
-        height: 20,
-        toDataURL: () => 'img',
-      } as any);
+    jest.mocked(html2canvas).mockResolvedValue({
+      width: 100,
+      height: 20,
+      toDataURL: () => 'img',
+    } as any);
     renderWithStore(<StudentExamPage />, { store: signedIn() });
     await userEvent.click(
       await screen.findByRole('button', { name: /Download PDF/ })

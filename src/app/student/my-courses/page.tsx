@@ -203,7 +203,8 @@ export default function MyCoursesPage() {
               No courses found
             </h2>
             <p className="text-gray-500 mb-6 font-medium">
-              You haven't enrolled in any courses that match your filters yet.
+              You haven&apos;t enrolled in any courses that match your filters
+              yet.
             </p>
             <Link
               href="/student/courses"

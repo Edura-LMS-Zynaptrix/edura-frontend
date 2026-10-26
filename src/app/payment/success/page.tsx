@@ -34,7 +34,7 @@ export default function PaymentSuccessPage() {
 
           <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
             <p className="text-sm text-green-800">
-              <strong>What's next?</strong>
+              <strong>What&apos;s next?</strong>
               <br />
               You can start taking exams immediately. Good luck with your
               studies!

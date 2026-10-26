@@ -745,8 +745,8 @@ export default function QuestionsPage() {
             </div>
           ) : questions.length === 0 ? (
             <div className="text-center py-12 text-gray-500">
-              No questions yet. Click "Add Question" or "Import CSV" to get
-              started.
+              No questions yet. Click &quot;Add Question&quot; or &quot;Import
+              CSV&quot; to get started.
             </div>
           ) : (
             <div className="space-y-6">
@@ -1536,7 +1536,8 @@ export default function QuestionsPage() {
                     import
                   </li>
                   <li>
-                    • Add images afterwards with the "Upload Images ZIP" button
+                    • Add images afterwards with the &quot;Upload Images
+                    ZIP&quot; button
                   </li>
                 </ul>
               </div>
@@ -1557,8 +1558,8 @@ export default function QuestionsPage() {
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                 <p className="text-sm text-yellow-800">
                   <strong>Note:</strong> Questions are appended after the
-                  existing ones. Save the file as UTF-8 CSV (Excel: "CSV
-                  UTF-8").
+                  existing ones. Save the file as UTF-8 CSV (Excel: &quot;CSV
+                  UTF-8&quot;).
                 </p>
               </div>
 

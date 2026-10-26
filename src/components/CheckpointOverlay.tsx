@@ -184,12 +184,12 @@ const CheckpointOverlay: React.FC<CheckpointOverlayProps> = ({
                       {isCorrect ? 'Correct!' : 'Incorrect'}
                     </div>
                     <p className="opacity-80 leading-relaxed italic">
-                      "
+                      &quot;
                       {currentQuestion.explanation ||
                         (isCorrect
                           ? 'Well done!'
                           : 'That was not quite right. Try again or check the hint.')}
-                      "
+                      &quot;
                     </p>
                   </motion.div>
                 )}

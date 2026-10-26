@@ -886,8 +886,8 @@ export default function ProfilePage() {
                 // Change Password — email users (or Google users who already set a password)
                 <>
                   <p className="text-sm text-gray-500 mb-4">
-                    A password is set on your account. To change it, we'll send
-                    a reset link to <strong>{user.email}</strong>.
+                    A password is set on your account. To change it, we&apos;ll
+                    send a reset link to <strong>{user.email}</strong>.
                   </p>
                   <Link
                     href="/forgot-password"

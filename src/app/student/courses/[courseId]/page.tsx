@@ -34,7 +34,6 @@ export default function CourseOverviewPage() {
     (state) => state.auth
   );
 
-  if (needsProfileCompletion) return null;
   const [enrolling, setEnrolling] = useState<string | null>(null);
   const [statusModal, setStatusModal] = useState<{
     title: string;
@@ -193,6 +192,8 @@ export default function CourseOverviewPage() {
       </div>
     </div>
   );
+
+  if (needsProfileCompletion) return null;
 
   if (loading) {
     return (

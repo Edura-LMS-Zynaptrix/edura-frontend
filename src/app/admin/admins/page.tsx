@@ -345,9 +345,9 @@ export default function AdminsPage() {
               <p className="text-sm text-teal-800 mt-1 leading-relaxed">
                 Every administrator account has full, equal access to manage
                 courses, students, exams, payments, and other admin accounts —
-                there is no separate tier of "master" vs "sub" admins. Add
-                accounts here only for people you trust with full platform
-                access.
+                there is no separate tier of &quot;master&quot; vs
+                &quot;sub&quot; admins. Add accounts here only for people you
+                trust with full platform access.
               </p>
             </div>
           </div>
