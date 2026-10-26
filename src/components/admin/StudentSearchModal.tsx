@@ -1,54 +1,57 @@
-'use client'
+'use client';
 
-import React, { useState, useEffect } from 'react'
-import { Search, User, X, Loader2, MessageSquarePlus } from 'lucide-react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { getAdminStudents, AdminStudent } from '@/lib/api/admin'
+import React, { useState, useEffect } from 'react';
+import { Search, User, X, Loader2, MessageSquarePlus } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { getAdminStudents, AdminStudent } from '@/lib/api/admin';
 
 interface StudentSearchModalProps {
-  isOpen: boolean
-  onClose: () => void
-  onSelectStudent: (student: AdminStudent) => void
-  isProcessing?: boolean
+  isOpen: boolean;
+  onClose: () => void;
+  onSelectStudent: (student: AdminStudent) => void;
+  isProcessing?: boolean;
 }
 
-export default function StudentSearchModal({ 
-  isOpen, 
-  onClose, 
+export default function StudentSearchModal({
+  isOpen,
+  onClose,
   onSelectStudent,
-  isProcessing = false 
+  isProcessing = false,
 }: StudentSearchModalProps) {
-  const [searchTerm, setSearchTerm] = useState('')
-  const [students, setStudents] = useState<AdminStudent[]>([])
-  const [isLoading, setIsLoading] = useState(false)
+  const [searchTerm, setSearchTerm] = useState('');
+  const [students, setStudents] = useState<AdminStudent[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     if (!isOpen) {
-      setSearchTerm('')
-      setStudents([])
-      return
+      setSearchTerm('');
+      setStudents([]);
+      return;
     }
 
     const delayDebounceFn = setTimeout(async () => {
       if (searchTerm.length >= 2) {
-        setIsLoading(true)
+        setIsLoading(true);
         try {
-          const response = await getAdminStudents({ search: searchTerm, limit: 10 })
-          setStudents(response.students)
+          const response = await getAdminStudents({
+            search: searchTerm,
+            limit: 10,
+          });
+          setStudents(response.students);
         } catch (error) {
-          console.error('Failed to search students:', error)
+          console.error('Failed to search students:', error);
         } finally {
-          setIsLoading(false)
+          setIsLoading(false);
         }
       } else {
-        setStudents([])
+        setStudents([]);
       }
-    }, 300)
+    }, 300);
 
-    return () => clearTimeout(delayDebounceFn)
-  }, [searchTerm, isOpen])
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchTerm, isOpen]);
 
-  if (!isOpen) return null
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
@@ -70,7 +73,7 @@ export default function StudentSearchModal({
             <MessageSquarePlus className="w-5 h-5 text-teal-600" />
             New Conversation
           </h3>
-          <button 
+          <button
             onClick={onClose}
             className="p-2 hover:bg-gray-200 rounded-lg transition-colors text-gray-500"
           >
@@ -81,7 +84,7 @@ export default function StudentSearchModal({
         <div className="p-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-            <input 
+            <input
               autoFocus
               type="text"
               placeholder="Search by name, email or school..."
@@ -111,9 +114,15 @@ export default function StudentSearchModal({
                     {student.full_name[0].toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-gray-900 truncate">{student.full_name}</p>
-                    <p className="text-xs text-gray-500 truncate">{student.email} • Grade {student.grade}</p>
-                    <p className="text-[10px] text-gray-400 truncate mt-0.5">{student.school}</p>
+                    <p className="text-sm font-bold text-gray-900 truncate">
+                      {student.full_name}
+                    </p>
+                    <p className="text-xs text-gray-500 truncate">
+                      {student.email} • Grade {student.grade}
+                    </p>
+                    <p className="text-[10px] text-gray-400 truncate mt-0.5">
+                      {student.school}
+                    </p>
                   </div>
                   <div className="opacity-0 group-hover:opacity-100 transition-opacity">
                     <div className="px-3 py-1 bg-teal-600 text-white text-[10px] font-bold rounded-lg shadow-lg shadow-teal-600/20">
@@ -126,25 +135,31 @@ export default function StudentSearchModal({
           ) : searchTerm.length >= 2 ? (
             <div className="flex flex-col items-center justify-center h-full py-20 text-gray-400 gap-3">
               <User className="w-12 h-12 opacity-20" />
-              <p className="text-sm font-medium">No students found matching "{searchTerm}"</p>
+              <p className="text-sm font-medium">
+                No students found matching &quot;{searchTerm}&quot;
+              </p>
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center h-full py-20 text-gray-400 gap-3">
               <Search className="w-12 h-12 opacity-10" />
-              <p className="text-sm font-medium italic">Type at least 2 characters to search</p>
+              <p className="text-sm font-medium italic">
+                Type at least 2 characters to search
+              </p>
             </div>
           )}
         </div>
-        
+
         {isProcessing && (
           <div className="absolute inset-0 bg-white/60 backdrop-blur-[1px] flex items-center justify-center z-50">
             <div className="flex items-center gap-3 bg-white px-6 py-3 rounded-2xl shadow-xl border border-gray-100">
               <Loader2 className="w-5 h-5 animate-spin text-teal-600" />
-              <span className="text-sm font-bold text-gray-900">Initializing chat...</span>
+              <span className="text-sm font-bold text-gray-900">
+                Initializing chat...
+              </span>
             </div>
           </div>
         )}
       </motion.div>
     </div>
-  )
+  );
 }

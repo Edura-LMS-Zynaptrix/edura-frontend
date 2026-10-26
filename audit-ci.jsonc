@@ -1,0 +1,41 @@
+{
+  // Used by the "Security Scan" job: npx audit-ci --config audit-ci.jsonc
+  // Fails on any NEW high/critical advisory. The advisories below are accepted
+  // risks (ADR-14 in edura-documents): production runs next@15.5.20 and the
+  // dependency tree was deliberately not changed. Remove entries as they are fixed.
+  "high": true,
+  "report-type": "summary",
+  "allowlist": [
+    // brace-expansion
+    "GHSA-6j4f-fj2g-mc7p",
+    "GHSA-qhr7-859c-m2p7",
+    // dompurify
+    "GHSA-cg2g-xh64-v4q7",
+    "GHSA-mrv2-3pqr-j5jr",
+    // follow-redirects
+    "GHSA-8r9p-f939-6h3c",
+    "GHSA-q3jh-wrc6-jgq8",
+    // js-yaml
+    "GHSA-2883-xcg3-v3hh",
+    "GHSA-5p4m-2wfm-xmqj",
+    // nanoid
+    "GHSA-2v37-7h3g-55p8",
+    // next
+    "GHSA-2464-fhr4-w9xw",
+    "GHSA-2xp9-vwfh-vxw4",
+    "GHSA-89xv-2m56-2m9x",
+    "GHSA-m99w-x7hq-7vfj",
+    "GHSA-p293-qw3h-jr36",
+    "GHSA-p3m5-59mp-jv5r",
+    "GHSA-p9j2-gv94-2wf4",
+    // postcss
+    "GHSA-6g55-p6wh-862q",
+    "GHSA-r28c-9q8g-f849",
+    // sharp
+    "GHSA-f88m-g3jw-g9cj",
+    "GHSA-rgj7-g3m4-5g8c",
+    "GHSA-wq5f-xc86-pv6w",
+    // source-map-js
+    "GHSA-68fv-2mgg-jv7q"
+  ]
+}

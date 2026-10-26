@@ -1,17 +1,17 @@
-import type { Metadata, Viewport } from 'next'
-import { Suspense } from 'react'
-import { Inter } from 'next/font/google'
-import './globals.css'
-import { Providers } from '@/lib/redux/provider'
-import NotificationManager from '@/components/NotificationManager'
-import AuthInitializer from '@/components/AuthInitializer'
-import Navbar from '@/components/Navbar'
-import Footer from '@/components/Footer'
-import GoogleAuthProvider from '@/components/GoogleAuthProvider'
-import BadgeCelebration from '@/components/badges/BadgeCelebration'
-import ChatWidget from '@/components/chat/ChatWidget'
+import type { Metadata, Viewport } from 'next';
+import { Suspense } from 'react';
+import { Inter } from 'next/font/google';
+import './globals.css';
+import { Providers } from '@/lib/redux/provider';
+import NotificationManager from '@/components/NotificationManager';
+import AuthInitializer from '@/components/AuthInitializer';
+import Navbar from '@/components/Navbar';
+import Footer from '@/components/Footer';
+import GoogleAuthProvider from '@/components/GoogleAuthProvider';
+import BadgeCelebration from '@/components/badges/BadgeCelebration';
+import ChatWidget from '@/components/chat/ChatWidget';
 
-const inter = Inter({ subsets: ['latin'] })
+const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://www.edura.com'),
@@ -75,18 +75,18 @@ export const metadata: Metadata = {
     apple: '/apple-icon.svg',
   },
   manifest: '/manifest.json',
-}
+};
 
 export const viewport: Viewport = {
   themeColor: '#0d9488',
   width: 'device-width',
   initialScale: 1,
-}
+};
 
 export default function RootLayout({
   children,
 }: {
-  children: React.ReactNode
+  children: React.ReactNode;
 }) {
   const structuredData = {
     '@context': 'https://schema.org',
@@ -103,7 +103,7 @@ export default function RootLayout({
         url: 'https://www.edura.com',
       },
     ],
-  }
+  };
 
   return (
     <html lang="en">
@@ -118,9 +118,7 @@ export default function RootLayout({
           <GoogleAuthProvider>
             <AuthInitializer />
             <Navbar />
-            <Suspense fallback={null}>
-              {children}
-            </Suspense>
+            <Suspense fallback={null}>{children}</Suspense>
             <Footer />
             <NotificationManager />
             <BadgeCelebration />
@@ -129,5 +127,5 @@ export default function RootLayout({
         </Providers>
       </body>
     </html>
-  )
+  );
 }

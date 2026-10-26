@@ -1,7 +1,7 @@
-'use client'
+'use client';
 
-import CourseList from './CourseList'
+import CourseList from './CourseList';
 
 export default function ExamCoursesPage() {
-  return <CourseList />
+  return <CourseList />;
 }

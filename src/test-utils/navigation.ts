@@ -22,15 +22,15 @@ export const nav = {
   },
   /** Reset to a signed-out visitor on the home page. */
   reset() {
-    nav.pathname = '/'
-    nav.params = {}
-    nav.search = new URLSearchParams()
-    Object.values(nav.router).forEach((fn) => fn.mockReset())
+    nav.pathname = '/';
+    nav.params = {};
+    nav.search = new URLSearchParams();
+    Object.values(nav.router).forEach((fn) => fn.mockReset());
   },
   setSearch(query: Record<string, string>) {
-    nav.search = new URLSearchParams(query)
+    nav.search = new URLSearchParams(query);
   },
-}
+};
 
 export const navigationMock = {
   __esModule: true,
@@ -40,4 +40,4 @@ export const navigationMock = {
   useSearchParams: () => nav.search,
   redirect: jest.fn(),
   notFound: jest.fn(),
-}
+};

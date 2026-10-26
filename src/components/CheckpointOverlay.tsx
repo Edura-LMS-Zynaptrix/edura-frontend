@@ -1,51 +1,60 @@
-'use client'
+'use client';
 
-import React, { useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { CheckCircle2, XCircle, AlertCircle, ArrowRight, Play } from 'lucide-react'
-import confetti from 'canvas-confetti'
+import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  CheckCircle2,
+  XCircle,
+  AlertCircle,
+  ArrowRight,
+  Play,
+} from 'lucide-react';
+import confetti from 'canvas-confetti';
 
 interface Question {
-  id: string
-  question_text: string
-  option_a: string
-  option_b: string
-  option_c?: string
-  option_d?: string
-  option_e?: string
-  correct_option: string
-  explanation?: string
+  id: string;
+  question_text: string;
+  option_a: string;
+  option_b: string;
+  option_c?: string;
+  option_d?: string;
+  option_e?: string;
+  correct_option: string;
+  explanation?: string;
 }
 
 interface CheckpointOverlayProps {
   checkpoint: {
-    id: string
-    questions: Question[]
-  }
-  onSuccess: () => void
+    id: string;
+    questions: Question[];
+  };
+  onSuccess: () => void;
 }
 
-const CheckpointOverlay: React.FC<CheckpointOverlayProps> = ({ checkpoint, onSuccess }) => {
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
-  const [selectedOption, setSelectedOption] = useState<string | null>(null)
-  const [showFeedback, setShowFeedback] = useState(false)
-  const [isCorrect, setIsCorrect] = useState(false)
+const CheckpointOverlay: React.FC<CheckpointOverlayProps> = ({
+  checkpoint,
+  onSuccess,
+}) => {
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [selectedOption, setSelectedOption] = useState<string | null>(null);
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [isCorrect, setIsCorrect] = useState(false);
 
-  const currentQuestion = checkpoint.questions[currentQuestionIndex]
+  const currentQuestion = checkpoint.questions[currentQuestionIndex];
   const options = [
     { label: 'a', text: currentQuestion.option_a },
     { label: 'b', text: currentQuestion.option_b },
     { label: 'c', text: currentQuestion.option_c },
     { label: 'd', text: currentQuestion.option_d },
     { label: 'e', text: currentQuestion.option_e },
-  ].filter(opt => opt.text)
+  ].filter((opt) => opt.text);
 
   const handleCheck = () => {
-    if (!selectedOption) return
-    
-    const correct = selectedOption === currentQuestion.correct_option
-    setIsCorrect(correct)
-    setShowFeedback(true)
+    if (!selectedOption) return;
+
+    const correct = selectedOption === currentQuestion.correct_option;
+    setIsCorrect(correct);
+    setShowFeedback(true);
 
     if (correct) {
       if (currentQuestionIndex === checkpoint.questions.length - 1) {
@@ -54,30 +63,30 @@ const CheckpointOverlay: React.FC<CheckpointOverlayProps> = ({ checkpoint, onSuc
           particleCount: 150,
           spread: 70,
           origin: { y: 0.6 },
-          colors: ['#2dd4bf', '#14b8a6', '#0f766e']
-        })
+          colors: ['#2dd4bf', '#14b8a6', '#0f766e'],
+        });
       }
     }
-  }
+  };
 
   const handleNext = () => {
     if (currentQuestionIndex < checkpoint.questions.length - 1) {
-      setCurrentQuestionIndex(prev => prev + 1)
-      setSelectedOption(null)
-      setShowFeedback(false)
+      setCurrentQuestionIndex((prev) => prev + 1);
+      setSelectedOption(null);
+      setShowFeedback(false);
     } else {
-      onSuccess()
+      onSuccess();
     }
-  }
+  };
 
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       className="absolute inset-0 z-[100] flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-sm"
     >
-      <motion.div 
+      <motion.div
         initial={{ scale: 0.95, y: 10 }}
         animate={{ scale: 1, y: 0 }}
         className="max-w-2xl w-full max-h-[95%] sm:max-h-[90%] bg-slate-900 border border-white/10 rounded-xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col"
@@ -89,8 +98,13 @@ const CheckpointOverlay: React.FC<CheckpointOverlayProps> = ({ checkpoint, onSuc
               <AlertCircle className="text-teal-400" size={14} />
             </div>
             <div>
-              <h3 className="text-white font-bold text-xs sm:text-sm">Knowledge Check</h3>
-              <p className="text-white/40 text-[9px] sm:text-[10px] font-medium uppercase tracking-wider">Question {currentQuestionIndex + 1} of {checkpoint.questions.length}</p>
+              <h3 className="text-white font-bold text-xs sm:text-sm">
+                Knowledge Check
+              </h3>
+              <p className="text-white/40 text-[9px] sm:text-[10px] font-medium uppercase tracking-wider">
+                Question {currentQuestionIndex + 1} of{' '}
+                {checkpoint.questions.length}
+              </p>
             </div>
           </div>
           <div className="px-2 py-0.5 sm:px-2.5 sm:py-1 bg-white/5 border border-white/10 rounded-full text-[8px] sm:text-[9px] font-black text-white/40 uppercase tracking-widest">
@@ -101,7 +115,7 @@ const CheckpointOverlay: React.FC<CheckpointOverlayProps> = ({ checkpoint, onSuc
         {/* Question Body - Scrollable */}
         <div className="p-3 sm:p-6 overflow-y-auto custom-scrollbar flex-1">
           <AnimatePresence mode="wait">
-            <motion.div 
+            <motion.div
               key={currentQuestion.id}
               initial={{ opacity: 0, x: 10 }}
               animate={{ opacity: 1, x: 0 }}
@@ -128,16 +142,26 @@ const CheckpointOverlay: React.FC<CheckpointOverlayProps> = ({ checkpoint, onSuc
                         : 'bg-white/5 border-white/10 text-white/70 hover:bg-white/10'
                     }`}
                   >
-                    <div className={`w-6 h-6 sm:w-7 sm:h-7 rounded flex items-center justify-center font-bold text-[10px] sm:text-xs uppercase flex-shrink-0 ${
-                      selectedOption === opt.label ? 'bg-teal-500 text-white' : 'bg-white/10 text-white/40'
-                    }`}>
+                    <div
+                      className={`w-6 h-6 sm:w-7 sm:h-7 rounded flex items-center justify-center font-bold text-[10px] sm:text-xs uppercase flex-shrink-0 ${
+                        selectedOption === opt.label
+                          ? 'bg-teal-500 text-white'
+                          : 'bg-white/10 text-white/40'
+                      }`}
+                    >
                       {opt.label}
                     </div>
-                    <span className="text-xs sm:text-sm font-medium flex-1">{opt.text}</span>
-                    
+                    <span className="text-xs sm:text-sm font-medium flex-1">
+                      {opt.text}
+                    </span>
+
                     {showFeedback && selectedOption === opt.label && (
                       <div className="ml-auto flex-shrink-0">
-                        {isCorrect ? <CheckCircle2 size={18} className="text-teal-400" /> : <XCircle size={18} className="text-rose-400" />}
+                        {isCorrect ? (
+                          <CheckCircle2 size={18} className="text-teal-400" />
+                        ) : (
+                          <XCircle size={18} className="text-rose-400" />
+                        )}
                       </div>
                     )}
                   </button>
@@ -146,17 +170,26 @@ const CheckpointOverlay: React.FC<CheckpointOverlayProps> = ({ checkpoint, onSuc
 
               <AnimatePresence>
                 {showFeedback && (
-                  <motion.div 
+                  <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     className={`p-4 rounded-xl text-xs border ${isCorrect ? 'bg-teal-500/5 border-teal-500/20 text-teal-300' : 'bg-rose-500/5 border-rose-500/20 text-rose-300'}`}
                   >
                     <div className="font-bold mb-1 flex items-center gap-2">
-                      {isCorrect ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
+                      {isCorrect ? (
+                        <CheckCircle2 size={14} />
+                      ) : (
+                        <AlertCircle size={14} />
+                      )}
                       {isCorrect ? 'Correct!' : 'Incorrect'}
                     </div>
                     <p className="opacity-80 leading-relaxed italic">
-                      "{currentQuestion.explanation || (isCorrect ? 'Well done!' : 'That was not quite right. Try again or check the hint.')}"
+                      &quot;
+                      {currentQuestion.explanation ||
+                        (isCorrect
+                          ? 'Well done!'
+                          : 'That was not quite right. Try again or check the hint.')}
+                      &quot;
                     </p>
                   </motion.div>
                 )}
@@ -184,12 +217,21 @@ const CheckpointOverlay: React.FC<CheckpointOverlayProps> = ({ checkpoint, onSuc
               onClick={handleNext}
               className="px-4 py-2 sm:px-6 sm:py-2 bg-teal-500 hover:bg-teal-400 text-slate-950 font-black rounded-lg sm:rounded-xl shadow-lg shadow-teal-500/20 transition-all active:scale-95 flex items-center gap-2 text-xs sm:text-sm ml-auto"
             >
-              {currentQuestionIndex < checkpoint.questions.length - 1 ? 'NEXT' : 'CONTINUE'}
-              {currentQuestionIndex < checkpoint.questions.length - 1 ? <ArrowRight size={14} /> : <Play size={14} fill="currentColor" />}
+              {currentQuestionIndex < checkpoint.questions.length - 1
+                ? 'NEXT'
+                : 'CONTINUE'}
+              {currentQuestionIndex < checkpoint.questions.length - 1 ? (
+                <ArrowRight size={14} />
+              ) : (
+                <Play size={14} fill="currentColor" />
+              )}
             </button>
           ) : (
             <button
-              onClick={() => { setShowFeedback(false); setSelectedOption(null); }}
+              onClick={() => {
+                setShowFeedback(false);
+                setSelectedOption(null);
+              }}
               className="px-4 py-2 sm:px-6 sm:py-2 bg-rose-500 hover:bg-rose-400 text-white font-black rounded-lg sm:rounded-xl shadow-lg shadow-rose-500/20 transition-all active:scale-95 flex items-center gap-2 text-xs sm:text-sm ml-auto"
             >
               TRY AGAIN
@@ -198,7 +240,7 @@ const CheckpointOverlay: React.FC<CheckpointOverlayProps> = ({ checkpoint, onSuc
         </div>
       </motion.div>
     </motion.div>
-  )
-}
+  );
+};
 
-export default CheckpointOverlay
+export default CheckpointOverlay;

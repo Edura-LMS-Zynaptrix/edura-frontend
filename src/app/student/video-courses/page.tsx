@@ -1,7 +1,7 @@
-'use client'
+'use client';
 
-import CourseList from '../courses/CourseList'
+import CourseList from '../courses/CourseList';
 
 export default function VideoCoursesPage() {
-  return <CourseList />
+  return <CourseList />;
 }

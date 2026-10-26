@@ -1,10 +1,10 @@
-import axios from 'axios'
+import axios from 'axios';
 
 // API Base URL from environment variable (Edura Nginx gateway, e.g. http://localhost)
-const API_URL = process.env.NEXT_PUBLIC_API_URL
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 if (!API_URL) {
-  console.warn('NEXT_PUBLIC_API_URL is not set. API requests may fail.')
+  console.warn('NEXT_PUBLIC_API_URL is not set. API requests may fail.');
 }
 
 const apiClient = axios.create({
@@ -12,50 +12,50 @@ const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-})
+});
 
 // ── Helper: read token from storage (sessionStorage beats localStorage) ──────
 function getStoredToken(key: string): string | null {
-  if (typeof window === 'undefined') return null
-  return sessionStorage.getItem(key) || localStorage.getItem(key) || null
+  if (typeof window === 'undefined') return null;
+  return sessionStorage.getItem(key) || localStorage.getItem(key) || null;
 }
 
 function getStorageBackend(): Storage | null {
-  if (typeof window === 'undefined') return null
+  if (typeof window === 'undefined') return null;
 
   // If accessToken is in sessionStorage, we are in a non-persistent session
   if (sessionStorage.getItem('accessToken')) {
-    return sessionStorage
+    return sessionStorage;
   }
 
   // If it's in localStorage, the user chose "Remember Me"
   if (localStorage.getItem('accessToken')) {
-    return localStorage
+    return localStorage;
   }
 
-  return null
+  return null;
 }
 
 function clearAuthTokens() {
-  if (typeof window === 'undefined') return
-  sessionStorage.removeItem('accessToken')
-  localStorage.removeItem('accessToken')
+  if (typeof window === 'undefined') return;
+  sessionStorage.removeItem('accessToken');
+  localStorage.removeItem('accessToken');
 }
 
 // ── Request interceptor: attach current access token ───────────────────────
 apiClient.interceptors.request.use(
   (config) => {
-    const token = getStoredToken('accessToken')
+    const token = getStoredToken('accessToken');
     if (token) {
-      config.headers.Authorization = `Bearer ${token}`
+      config.headers.Authorization = `Bearer ${token}`;
     }
-    return config
+    return config;
   },
   (error) => Promise.reject(error)
-)
+);
 
 // Track an in-flight refresh so concurrent 401s share one refresh call
-let refreshPromise: Promise<string> | null = null
+let refreshPromise: Promise<string> | null = null;
 
 async function refreshAccessToken(): Promise<string> {
   // Edura's auth_service issues the refresh token as an HttpOnly cookie
@@ -65,62 +65,67 @@ async function refreshAccessToken(): Promise<string> {
     `${API_URL}/api/auth/refresh`,
     {},
     { withCredentials: true }
-  )
+  );
 
-  const newAccessToken: string = response.data.access_token
+  const newAccessToken: string = response.data.access_token;
 
-  const storage = getStorageBackend() ?? sessionStorage
-  storage.setItem('accessToken', newAccessToken)
+  const storage = getStorageBackend() ?? sessionStorage;
+  storage.setItem('accessToken', newAccessToken);
 
-  return newAccessToken
+  return newAccessToken;
 }
 
 // ── Response interceptor: silent token refresh on 401 ──────────────────────
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
-    const originalRequest = error.config
-    const requestUrl: string = originalRequest?.url ?? ''
+    const originalRequest = error.config;
+    const requestUrl: string = originalRequest?.url ?? '';
 
     // Don't attempt refresh for auth routes themselves
     const isAuthRoute =
       requestUrl.includes('/api/auth/login') ||
       requestUrl.includes('/api/auth/register') ||
-      requestUrl.includes('/api/auth/refresh')
+      requestUrl.includes('/api/auth/refresh');
 
     // Only treat a 401 as "session expired" when we actually had a token to
     // begin with. An anonymous visitor (e.g. on the public home page, whose
     // widgets speculatively call protected endpoints) legitimately gets 401s
     // that have nothing to do with a session — forcing them to /login for
     // those was the bug.
-    const hadToken = !!getStoredToken('accessToken')
+    const hadToken = !!getStoredToken('accessToken');
 
-    if (error.response?.status === 401 && hadToken && !originalRequest._retry && !isAuthRoute) {
-      originalRequest._retry = true
+    if (
+      error.response?.status === 401 &&
+      hadToken &&
+      !originalRequest._retry &&
+      !isAuthRoute
+    ) {
+      originalRequest._retry = true;
 
       try {
         // Share one refresh across concurrent requests
         if (!refreshPromise) {
           refreshPromise = refreshAccessToken().finally(() => {
-            refreshPromise = null
-          })
+            refreshPromise = null;
+          });
         }
 
-        const newToken = await refreshPromise
-        originalRequest.headers.Authorization = `Bearer ${newToken}`
-        return apiClient(originalRequest) // replay the original request
+        const newToken = await refreshPromise;
+        originalRequest.headers.Authorization = `Bearer ${newToken}`;
+        return apiClient(originalRequest); // replay the original request
       } catch {
         // Refresh failed — clear everything and redirect to login
-        clearAuthTokens()
+        clearAuthTokens();
         if (typeof window !== 'undefined') {
-          window.location.href = '/login'
+          window.location.href = '/login';
         }
-        return Promise.reject(error)
+        return Promise.reject(error);
       }
     }
 
-    return Promise.reject(error)
+    return Promise.reject(error);
   }
-)
+);
 
-export default apiClient
+export default apiClient;

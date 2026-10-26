@@ -1,9 +1,9 @@
-import type { MetadataRoute } from 'next'
+import type { MetadataRoute } from 'next';
 
-const BASE_URL = 'https://www.edura.com'
+const BASE_URL = 'https://www.edura.com';
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const now = new Date()
+  const now = new Date();
 
   return [
     {
@@ -36,5 +36,5 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: 'weekly',
       priority: 0.8,
     },
-  ]
+  ];
 }

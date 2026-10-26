@@ -8,5 +8,5 @@ export default function Head() {
       />
       <meta name="robots" content="index, follow" />
     </>
-  )
+  );
 }
