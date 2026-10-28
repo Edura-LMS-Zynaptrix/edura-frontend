@@ -21,7 +21,18 @@ const config = {
     '!src/**/*.d.ts',
     '!src/app/**/head.tsx',
   ],
-  coverageReporters: ['text-summary', 'text', 'lcov'],
+  // cobertura is read by diff-cover in CI for the "new code" coverage gate.
+  coverageReporters: ['text-summary', 'text', 'lcov', 'cobertura'],
+  // Guideline 6.4 / 8.2: minimum 80% coverage (lines and branches). Jest exits
+  // non-zero, failing the Unit Tests check, if any figure falls below it.
+  coverageThreshold: {
+    global: {
+      statements: 80,
+      branches: 80,
+      functions: 80,
+      lines: 80,
+    },
+  },
 };
 
 module.exports = createJestConfig(config);

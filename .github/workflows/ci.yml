@@ -42,13 +42,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # diff-cover needs the base branch to find the lines a PR changed
+          fetch-depth: 0
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
       - run: npm ci
+      # Fails if overall coverage is below the 80% threshold in jest.config.js
       - run: npm run test:coverage
+      # Guideline 6.4 / 8.2: coverage on NEW code must be >= 80%
+      - name: Coverage gate (changed lines >= 80%)
+        if: github.event_name == 'pull_request' && hashFiles('coverage/cobertura-coverage.xml') != ''
+        run: |
+          pip install diff-cover
+          diff-cover coverage/cobertura-coverage.xml \
+            --compare-branch=origin/${{ github.base_ref }} \
+            --fail-under=80 \
+            --markdown-report=diff-coverage.md
+          cat diff-coverage.md >> "$GITHUB_STEP_SUMMARY"
       - name: Upload coverage report
         if: always()
         uses: actions/upload-artifact@v4
