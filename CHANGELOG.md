@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Frontend coverage badge showed "unknown" because CI never uploaded to Codecov; it now reads the line coverage that a new `Coverage Badge` CI job publishes to the `badges` branch, the same as the backend (DDP-#81)
+- Updated `follow-redirects` to 1.16.2 to fix the new high-severity advisory GHSA-mrwp-f3q8-3g9p that failed the Security Scan, and removed its two now-fixed entries from `audit-ci.jsonc` (DDP-#81)
 
 ### Added
 
