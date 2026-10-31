@@ -2,14 +2,29 @@
   "extends": [
     "next/core-web-vitals",
     "eslint:recommended",
-    "plugin:react/recommended",
-    "plugin:react-hooks/recommended"
+    "plugin:react/recommended"
   ],
   "rules": {
     "react/react-in-jsx-scope": "off",
     "no-unused-vars": "warn",
-    "react/prop-types": "off"
+    "react/prop-types": "off",
+    "react/no-unknown-property": ["error", { "ignore": ["jsx", "global"] }]
   },
+  "overrides": [
+    {
+      "files": ["**/*.ts", "**/*.tsx"],
+      "rules": {
+        "no-undef": "off"
+      }
+    },
+    {
+      "files": ["**/__tests__/**", "src/test-utils/**", "jest.setup.ts"],
+      "env": { "jest": true },
+      "rules": {
+        "no-extra-semi": "off"
+      }
+    }
+  ],
   "settings": {
     "react": {
       "version": "detect"

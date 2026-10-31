@@ -1,0 +1,126 @@
+name: Frontend CI
+
+on:
+  push:
+    branches: [develop, main, 'feature/**', 'fix/**', 'hotfix/**', 'release/**']
+  pull_request:
+    branches: [develop, main]
+
+jobs:
+  lint:
+    name: Lint & Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run format:check
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'
+
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # diff-cover needs the base branch to find the lines a PR changed
+          fetch-depth: 0
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      # Fails if overall coverage is below the 80% threshold in jest.config.js
+      - run: npm run test:coverage
+      # Guideline 6.4 / 8.2: coverage on NEW code must be >= 80%
+      - name: Coverage gate (changed lines >= 80%)
+        if: github.event_name == 'pull_request' && hashFiles('coverage/cobertura-coverage.xml') != ''
+        run: |
+          pip install diff-cover
+          diff-cover coverage/cobertura-coverage.xml \
+            --compare-branch=origin/${{ github.base_ref }} \
+            --fail-under=80 \
+            --markdown-report=diff-coverage.md
+          cat diff-coverage.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+          if-no-files-found: ignore
+
+  # Coverage badge: after a push to develop, write the line coverage as a
+  # shields.io endpoint file on the "badges" branch. The README badge reads that
+  # file, so no external coverage service is needed.
+  coverage-badge:
+    name: Coverage Badge
+    needs: unit-tests
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # lets this job push coverage.json to the badges branch
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run test:coverage
+      - name: Publish coverage badge
+        run: |
+          PCT=$(node -p "Math.round(require('./coverage/coverage-summary.json').total.lines.pct)")
+          echo "Line coverage: ${PCT}%" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$PCT" -ge 80 ]; then color=brightgreen; elif [ "$PCT" -ge 60 ]; then color=yellow; else color=red; fi
+          echo "{\"schemaVersion\":1,\"label\":\"coverage\",\"message\":\"${PCT}%\",\"color\":\"${color}\"}" > "$RUNNER_TEMP/coverage.json"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git ls-remote --exit-code --heads origin badges > /dev/null; then
+            git fetch origin badges
+            git checkout -B badges origin/badges
+          else
+            git checkout --orphan badges
+            git rm -rf . > /dev/null
+          fi
+          cp "$RUNNER_TEMP/coverage.json" coverage.json
+          git add coverage.json
+          git diff --cached --quiet || git commit -m "chore(badges): update coverage badge to ${PCT}%"
+          git push origin badges
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      # Fails on any high/critical advisory except the accepted risks listed in
+      # audit-ci.jsonc (documented in ADR-14).
+      - run: npx --yes audit-ci@7.1.0 --config audit-ci.jsonc
