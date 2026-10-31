@@ -7,10 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-
-- Frontend coverage badge showed "unknown" because CI never uploaded to Codecov; it now reads the line coverage that a new `Coverage Badge` CI job publishes to the `badges` branch, the same as the backend (DDP-#81)
-- Updated `follow-redirects` to 1.16.2 to fix the new high-severity advisory GHSA-mrwp-f3q8-3g9p that failed the Security Scan, and removed its two now-fixed entries from `audit-ci.jsonc` (DDP-#81)
+## [1.0.0] - 2026-10-31
 
 ### Added
 
@@ -29,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Frontend coverage badge showed "unknown" because CI never uploaded to Codecov; it now reads the line coverage that a new `Coverage Badge` CI job publishes to the `badges` branch, the same as the backend (DDP-#81)
+- Updated `follow-redirects` to 1.16.2 to fix the new high-severity advisory GHSA-mrwp-f3q8-3g9p that failed the Security Scan, and removed its two now-fixed entries from `audit-ci.jsonc` (DDP-#81)
 - All ESLint errors cleared so the lint check passes
 - Profile creation handles accounts that already have a profile (sign-up race after verification)
 
@@ -67,7 +66,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Upgraded to Next.js 15 and React 19 to resolve dependency audit vulnerabilities (ADR-11)
 
-[Unreleased]: https://github.com/Edura-LMS-Zynaptrix/edura-frontend/compare/v0.3.0...develop
+[Unreleased]: https://github.com/Edura-LMS-Zynaptrix/edura-frontend/compare/v1.0.0...develop
+[1.0.0]: https://github.com/Edura-LMS-Zynaptrix/edura-frontend/compare/v0.3.0...v1.0.0
 [0.3.0]: https://github.com/Edura-LMS-Zynaptrix/edura-frontend/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Edura-LMS-Zynaptrix/edura-frontend/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Edura-LMS-Zynaptrix/edura-frontend/releases/tag/v0.1.0
