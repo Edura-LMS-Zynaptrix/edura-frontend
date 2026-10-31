@@ -21,8 +21,15 @@ const config = {
     '!src/**/*.d.ts',
     '!src/app/**/head.tsx',
   ],
-  // cobertura is read by diff-cover in CI for the "new code" coverage gate.
-  coverageReporters: ['text-summary', 'text', 'lcov', 'cobertura'],
+  // cobertura is read by diff-cover in CI for the "new code" coverage gate;
+  // json-summary is read by the coverage badge job.
+  coverageReporters: [
+    'text-summary',
+    'text',
+    'lcov',
+    'cobertura',
+    'json-summary',
+  ],
   // Guideline 6.4 / 8.2: minimum 80% coverage (lines and branches). Jest exits
   // non-zero, failing the Unit Tests check, if any figure falls below it.
   coverageThreshold: {
