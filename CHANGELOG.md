@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Frontend coverage badge showed "unknown" because CI never uploaded to Codecov; it now reads the line coverage that a new `Coverage Badge` CI job publishes to the `badges` branch, the same as the backend (DDP-#81)
+
 ### Added
 
 - Unit tests (Jest and React Testing Library) for the pages, components and Redux slices: authentication, registration and profile completion, student results, rankings and attempt review, payment and bank-slip upload, admin and video content, chat, feedback, referral and badges (DDP-#52)
